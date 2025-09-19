@@ -1,0 +1,665 @@
+import React, { useState, useEffect, useCallback, useMemo } from "react";
+import {
+    View,
+    Text,
+    TextInput,
+    FlatList,
+    TouchableOpacity,
+    Button,
+    StyleSheet,
+    ScrollView,
+    Alert,
+    ActivityIndicator,
+    Image,
+    KeyboardAvoidingView,
+    Platform
+} from "react-native";
+import * as Contacts from "expo-contacts";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import axios from "axios";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { API_BASE_URL } from '../../../api';
+
+const CreateSplitGroup = () => {
+    const [contacts, setContacts] = useState([]);
+    const [filteredContacts, setFilteredContacts] = useState([]);
+    const [selected, setSelected] = useState([]);
+    const [groupName, setGroupName] = useState("");
+    const [searchText, setSearchText] = useState("");
+    const [registeredContacts, setRegisteredContacts] = useState([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [error, setError] = useState(null);
+
+    const navigation = useNavigation();
+    useEffect(() => {
+        const loadContacts = async () => {
+            try {
+                setIsLoading(true);
+                setError(null);
+
+                // Request contacts permission
+                const { status } = await Contacts.requestPermissionsAsync();
+                if (status !== "granted") {
+                    throw new Error("Contacts permission not granted");
+                }
+
+                // Get contacts
+                const { data } = await Contacts.getContactsAsync({
+                    fields: [
+                        Contacts.Fields.PhoneNumbers,
+                        Contacts.Fields.Name,
+                        Contacts.Fields.Image,
+                        Contacts.Fields.ImageAvailable
+                    ],
+                });
+
+                // Filter valid contacts
+                const validContacts = data.filter(
+                    (c) => c.phoneNumbers && c.phoneNumbers.length > 0 && c.name
+                );
+
+                // Process contacts to ensure image data is properly structured
+                const processedContacts = validContacts.map(contact => ({
+                    ...contact,
+                    imageAvailable: contact.imageAvailable || false,
+                    image: contact.imageAvailable ? {
+                        uri: contact.image.uri
+                    } : null
+                }));
+
+                setContacts(processedContacts);
+                await fetchAllUsers();
+            } catch (err) {
+                console.error("Error loading contacts:", err);
+                setError(err.message || "Failed to load contacts");
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
+        loadContacts();
+    }, []);
+
+    const fetchAllUsers = async () => {
+        try {
+            const userData = await AsyncStorage.getItem("userData");
+            if (!userData) {
+                throw new Error("User session expired");
+            }
+
+            const user = JSON.parse(userData);
+            const response = await axios.get(`${API_BASE_URL}/api/v1/user/usersdata`, {
+                headers: {
+                    Authorization: `Bearer ${user.token}`,
+                },
+            });
+
+            // Extract phone numbers from all users
+            const userPhoneNumbers = response.data.users.map(
+                (user) => user.phoneNumber
+            );
+            setRegisteredContacts(userPhoneNumbers);
+        } catch (error) {
+            console.error("Error fetching users:", {
+                url: error.config?.url,
+                status: error.response?.status,
+                message: error.message,
+            });
+
+            if (error.response?.status === 401) {
+                Alert.alert("Session Expired", "Please login again", [
+                    { text: "OK", onPress: () => navigation.navigate("Login") }
+                ]);
+            } else {
+                setError("Could not fetch registered users");
+            }
+        }
+    };
+
+    const displayContacts = useMemo(() => {
+        return contacts
+            .filter(c => c.name && c.phoneNumbers?.[0]?.number)
+            .map(c => {
+                const digits = c.phoneNumbers[0].number.replace(/\D/g, "").slice(-10);
+                return {
+                    ...c,
+                    normalized: digits,
+                    normalizedWithPrefix: `+91${digits}`
+                };
+            })
+            .filter(c =>
+                registeredContacts.includes(c.normalized) ||
+                registeredContacts.includes(c.normalizedWithPrefix)
+            );
+    }, [contacts, registeredContacts]);
+
+
+    const getDisplayContacts = () => {
+        return contacts.filter((contact) => {
+            if (!contact.phoneNumbers?.[0]?.number) return false;
+
+            const digits = contact.phoneNumbers[0].number.replace(/\D/g, "");
+            const last10 = digits.slice(-10);
+            return (
+                registeredContacts.includes(last10) ||
+                registeredContacts.includes(`+91${last10}`)
+            );
+        });
+    };
+
+    const handleCreateGroup = async () => {
+        try {
+            setIsLoading(true);
+
+            const userData = await AsyncStorage.getItem("userData");
+            if (!userData) {
+                throw new Error("User session expired");
+            }
+
+            const user = JSON.parse(userData);
+            if (!user?._id) {
+                throw new Error("Invalid user data");
+            }
+
+            if (selected.length === 0) {
+                throw new Error("No contacts selected");
+            }
+
+            if (!groupName.trim()) {
+                throw new Error("Group name required");
+            }
+
+            // Prepare phone numbers
+            const phoneNumbers = selected
+                .map((contact) => {
+                    if (!contact.phoneNumbers?.[0]?.number) return null;
+                    const digits = contact.phoneNumbers[0].number.replace(/\D/g, "");
+                    const last10 = digits.slice(-10);
+                    return last10.length === 10 ? last10 : null;
+                })
+                .filter(Boolean);
+
+            const response = await axios.post(
+                `${API_BASE_URL}/api/v1/splits/create-group`,
+                {
+                    name: groupName,
+                    phoneNumbers,
+                    createdBy: user._id,
+                    members: selected.map(contact => ({
+                        name: contact.name,
+                        phoneNumber: contact.phoneNumbers[0].number.replace(/\D/g, "").slice(-10),
+                        avatar: contact.imageAvailable && contact.image ? contact.image.uri : null
+                    }))
+                },
+                {
+                    headers: {
+                        "Content-Type": "application/json",
+                        Authorization: `Bearer ${user.token}`,
+                    },
+                }
+            );
+
+            if (response.data.success) {
+                navigation.goBack();
+            }
+        } catch (error) {
+            console.error("Error creating group:", error);
+            Alert.alert(
+                "Error",
+                error.response?.data?.message || error.message || "Failed to create group"
+            );
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const toggleSelect = useCallback((contact) => {
+        setSelected(prev =>
+            prev.some(c => c.id === contact.id)
+                ? prev.filter(c => c.id !== contact.id)
+                : [...prev, contact]
+        );
+    }, []);
+
+
+    const handleSearch = (text) => {
+        setSearchText(text);
+        const lower = text.toLowerCase();
+        const filtered = getDisplayContacts().filter((c) =>
+            c.name.toLowerCase().includes(lower)
+        );
+        setFilteredContacts(filtered);
+    };
+
+    const renderContactItem = useCallback(({ item }) => {
+        const isSelected = selected.some(c => c.id === item.id);
+
+        return (
+            <TouchableOpacity
+                onPress={() => toggleSelect(item)}
+                style={[
+                    styles.contactItem,
+                    isSelected && styles.selectedContact,
+                ]}
+            >
+                <View style={styles.contactInfo}>
+                    {item.imageAvailable && item.image ? (
+                        <Image
+                            source={{ uri: item.image.uri }}
+                            style={styles.contactAvatar}
+                        />
+                    ) : (
+                        <View style={styles.contactAvatarPlaceholder}>
+                            <Text style={styles.contactAvatarText}>
+                                {item.name?.charAt(0)?.toUpperCase()}
+                            </Text>
+                        </View>
+                    )}
+                    <View style={styles.contactDetails}>
+                        <Text style={styles.contactName}>{item.name}</Text>
+                        <Text style={styles.contactNumber}>{item.phoneNumbers?.[0]?.number || "N/A"}</Text>
+                    </View>
+                </View>
+            </TouchableOpacity>
+        );
+    }, [selected]);
+
+    const renderSelectedContact = (contact) => (
+        <View key={contact.id} style={styles.selectedItem}>
+            <Text style={styles.selectedText}>
+                {contact.name?.split(" ")[0] || "N/A"}
+            </Text>
+        </View>
+    );
+
+    if (error) {
+        return (
+            <SafeAreaView style={styles.safeArea}>
+                <View style={styles.errorContainer}>
+                    <Text style={styles.errorText}>{error}</Text>
+                    <Button
+                        title="Try Again"
+                        onPress={() => {
+                            setError(null);
+                            setIsLoading(true);
+                            fetchAllUsers();
+                        }}
+                    />
+                </View>
+            </SafeAreaView>
+        );
+    }
+
+    if (isLoading) {
+        return (
+            <SafeAreaView style={styles.safeArea}>
+                <View style={styles.loadingContainer}>
+                    <ActivityIndicator size="large" color="#4A90E2" />
+                    <Text style={styles.loadingText}>Loading contacts...</Text>
+                </View>
+            </SafeAreaView>
+        );
+    }
+
+    return (
+        <SafeAreaView style={styles.safeArea}>
+            <LinearGradient
+                colors={['#8b5cf6', '#7c3aed']}
+                style={styles.header}
+            >
+                <TouchableOpacity
+                    onPress={() => navigation.goBack()}
+                    style={styles.backButton}
+                >
+                    <Ionicons name="arrow-back" size={24} color="#fff" />
+                </TouchableOpacity>
+                <Text style={styles.headerTitle}>Create Split Group</Text>
+                <View style={styles.headerSpacer} />
+            </LinearGradient>
+
+            <KeyboardAvoidingView
+                style={styles.keyboardAvoidingView}
+                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+            >
+                <View style={styles.container}>
+                    <View style={styles.searchContainer}>
+                        <Ionicons name="search" size={20} color="#9ca3af" style={styles.searchIcon} />
+                        <TextInput
+                            placeholder="Search Contacts"
+                            value={searchText}
+                            onChangeText={handleSearch}
+                            style={styles.searchInput}
+                            placeholderTextColor="#9ca3af"
+                        />
+                    </View>
+
+                    {selected.length > 0 && (
+                        <View style={styles.selectedSection}>
+                            <Text style={styles.selectedSectionTitle}>Selected ({selected.length})</Text>
+                            <ScrollView
+                                horizontal
+                                showsHorizontalScrollIndicator={false}
+                                style={styles.selectedBar}
+                                contentContainerStyle={styles.selectedBarContent}
+                            >
+                                {selected.map(renderSelectedContact)}
+                            </ScrollView>
+                        </View>
+                    )}
+
+                    <FlatList
+                        data={searchText ? filteredContacts : getDisplayContacts()}
+                        keyExtractor={(item) => item.id}
+                        renderItem={renderContactItem}
+                        ListEmptyComponent={
+                            <View style={styles.emptyContainer}>
+                                <Text style={styles.emptyText}>No contacts found</Text>
+                            </View>
+                        }
+                    />
+
+                </View>
+
+                <View style={styles.bottomSheet}>
+                    <View style={styles.groupInputContainer}>
+                        <Ionicons name="people" size={20} color="#8b5cf6" style={styles.groupInputIcon} />
+                        <TextInput
+                            placeholder="Enter group name"
+                            value={groupName}
+                            onChangeText={setGroupName}
+                            style={styles.groupInput}
+                            placeholderTextColor="#9ca3af"
+                        />
+                    </View>
+
+                    <TouchableOpacity
+                        style={[
+                            styles.createButton,
+                            (!groupName || selected.length === 0 || isLoading) && styles.createButtonDisabled
+                        ]}
+                        onPress={handleCreateGroup}
+                        disabled={!groupName || selected.length === 0 || isLoading}
+                    >
+                        <LinearGradient
+                            colors={(!groupName || selected.length === 0 || isLoading) ? ['#9ca3af', '#6b7280'] : ['#8b5cf6', '#7c3aed']}
+                            style={styles.createButtonGradient}
+                        >
+                            <Ionicons name="add-circle" size={20} color="#fff" />
+                            <Text style={styles.createButtonText}>
+                                Create Group ({selected.length})
+                            </Text>
+                        </LinearGradient>
+                    </TouchableOpacity>
+                </View>
+            </KeyboardAvoidingView>
+        </SafeAreaView>
+    );
+};
+
+const styles = StyleSheet.create({
+    safeArea: {
+        flex: 1,
+        backgroundColor: '#f8fafc',
+    },
+    header: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: 16,
+        paddingTop: 20,
+        shadowColor: '#8b5cf6',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.1,
+        shadowRadius: 8,
+        elevation: 8,
+    },
+    keyboardAvoidingView: {
+        flex: 1,
+    },
+    backButton: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        backgroundColor: 'rgba(255, 255, 255, 0.2)',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginRight: 16,
+    },
+    headerTitle: {
+        fontSize: 20,
+        fontWeight: '700',
+        color: '#fff',
+        flex: 1,
+    },
+    headerSpacer: {
+        width: 40,
+    },
+    container: {
+        flex: 1,
+        padding: 20,
+        paddingBottom: 0,
+    },
+    searchContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#fff',
+        borderRadius: 12,
+        marginBottom: 20,
+        paddingHorizontal: 16,
+        shadowColor: '#8b5cf6',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        elevation: 3,
+        borderWidth: 1,
+        borderColor: '#e5e7eb',
+    },
+    searchIcon: {
+        marginRight: 12,
+    },
+    searchInput: {
+        flex: 1,
+        paddingVertical: 16,
+        fontSize: 16,
+        color: '#1f2937',
+    },
+    selectedSection: {
+        marginBottom: 20,
+    },
+    selectedSectionTitle: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: '#374151',
+        marginBottom: 12,
+    },
+    selectedBar: {
+        marginBottom: 0,
+    },
+    selectedBarContent: {
+        paddingVertical: 4,
+    },
+    selectedItem: {
+        backgroundColor: '#8b5cf6',
+        borderRadius: 20,
+        paddingHorizontal: 16,
+        paddingVertical: 10,
+        marginRight: 12,
+        shadowColor: '#8b5cf6',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.2,
+        shadowRadius: 4,
+        elevation: 3,
+    },
+    selectedText: {
+        color: '#fff',
+        fontWeight: '600',
+        fontSize: 14,
+    },
+    contactInfo: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    contactAvatar: {
+        width: 48,
+        height: 48,
+        borderRadius: 24,
+        marginRight: 16,
+    },
+    contactAvatarPlaceholder: {
+        width: 48,
+        height: 48,
+        borderRadius: 24,
+        backgroundColor: '#8b5cf6',
+        marginRight: 16,
+        justifyContent: 'center',
+        alignItems: 'center',
+        shadowColor: '#8b5cf6',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.2,
+        shadowRadius: 4,
+        elevation: 3,
+    },
+    contactAvatarText: {
+        color: '#fff',
+        fontSize: 20,
+        fontWeight: '700',
+    },
+    contactDetails: {
+        flex: 1,
+    },
+    contactItem: {
+        backgroundColor: '#fff',
+        padding: 16,
+        borderRadius: 16,
+        marginBottom: 12,
+        borderWidth: 1.5,
+        borderColor: '#e5e7eb',
+        shadowColor: '#8b5cf6',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 4,
+        elevation: 2,
+    },
+    selectedContact: {
+        backgroundColor: 'rgba(139, 92, 246, 0.08)',
+        borderColor: '#8b5cf6',
+        shadowColor: '#8b5cf6',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.15,
+        shadowRadius: 8,
+        elevation: 4,
+    },
+    contactName: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: '#1f2937',
+        marginBottom: 4,
+    },
+    contactNumber: {
+        fontSize: 14,
+        color: '#6b7280',
+        fontWeight: '500',
+    },
+    bottomSheet: {
+        backgroundColor: '#fff',
+        padding: 24,
+        paddingBottom: Platform.OS === 'ios' ? 34 : 24,
+        borderTopLeftRadius: 24,
+        borderTopRightRadius: 24,
+        shadowColor: '#8b5cf6',
+        shadowOffset: { width: 0, height: -4 },
+        shadowOpacity: 0.1,
+        shadowRadius: 12,
+        elevation: 8,
+        borderTopWidth: 1,
+        borderTopColor: '#e5e7eb',
+        minHeight: 120,
+    },
+    groupInputContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#f8fafc',
+        borderRadius: 12,
+        marginBottom: 20,
+        paddingHorizontal: 16,
+        borderWidth: 1.5,
+        borderColor: '#e5e7eb',
+    },
+    groupInputIcon: {
+        marginRight: 12,
+    },
+    groupInput: {
+        flex: 1,
+        paddingVertical: 16,
+        fontSize: 16,
+        color: '#1f2937',
+    },
+    createButton: {
+        borderRadius: 12,
+        overflow: 'hidden',
+        shadowColor: '#8b5cf6',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+        elevation: 6,
+    },
+    createButtonDisabled: {
+        shadowOpacity: 0.1,
+        elevation: 2,
+    },
+    createButtonGradient: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 16,
+        paddingHorizontal: 24,
+        gap: 8,
+    },
+    createButtonText: {
+        color: '#fff',
+        fontSize: 16,
+        fontWeight: '600',
+    },
+    loadingContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: '#f8fafc',
+    },
+    loadingText: {
+        marginTop: 16,
+        fontSize: 16,
+        color: '#6b7280',
+        fontWeight: '500',
+    },
+    errorContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 20,
+        backgroundColor: '#f8fafc',
+    },
+    errorText: {
+        fontSize: 16,
+        color: '#ef4444',
+        marginBottom: 20,
+        textAlign: 'center',
+        fontWeight: '500',
+    },
+    emptyContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 40,
+    },
+    emptyText: {
+        fontSize: 16,
+        color: '#9ca3af',
+        fontWeight: '500',
+    },
+});
+
+export default CreateSplitGroup;

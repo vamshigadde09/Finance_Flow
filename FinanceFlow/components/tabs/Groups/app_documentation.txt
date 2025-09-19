@@ -1,0 +1,152 @@
+Finance Flow App Documentation
+
+Core Features:
+1. Group Management
+2. Member Management
+3. Transaction Viewing
+4. Settlement System
+
+Detailed Feature Breakdown:
+
+1. Group Management
+- Create groups with multiple members
+- View group details including member list
+- Group summary showing total spending and member balances
+- Settle Up mode toggle for each member
+
+2. Member Management
+- View all group members with their avatars
+- See individual member balances
+- Track who owes whom
+- Member-specific settlement options
+
+3. Transaction Viewing
+- View all group transactions
+- Transaction details include:
+  * Title
+  * Amount
+  * Date
+  * Category
+  * Paid by
+  * Split between members
+- Expandable transaction cards
+- Option to view all or recent transactions
+
+4. Settlement System
+- Settle Up mode for each member
+- Track pending settlements
+- Confirm/reject payments
+- View settlement history
+- Real-time balance updates
+
+User Flow Examples:
+
+1. Creating and Managing a Group:
+a) User creates a group "Trip to Goa"
+b) Adds members by phone numbers
+c) Group is created with all members
+d) Each member can view group details and balances
+
+2. Adding a Transaction:
+a) User clicks "+" button
+b) Enters transaction details:
+   - Title: "Hotel Booking"
+   - Amount: ₹5000
+   - Category: "Accommodation"
+   - Selects members to split with
+c) Transaction is added and balances update
+
+3. Settlement Process:
+a) User A owes User B ₹1000
+b) User A enables Settle Up mode
+c) User A pays User B
+d) User B confirms payment
+e) Balances update automatically
+
+4. Viewing Transactions:
+a) User opens group
+b) Views recent transactions
+c) Can expand any transaction to see details
+d) Can view all transactions by clicking "View all"
+
+Technical Requirements:
+
+Frontend:
+1. React Native components:
+   - SafeAreaView
+   - ScrollView
+   - TouchableOpacity
+   - Modal
+   - View/Text components
+
+2. State Management:
+   - useState for local state
+   - useEffect for data fetching
+   - useCallback for memoized functions
+
+3. Navigation:
+   - React Navigation
+   - Stack navigation for screens
+
+4. UI Components:
+   - Custom buttons
+   - Transaction cards
+   - Member list items
+   - Balance summary cards
+   - Settlement modals
+
+Backend API Endpoints Needed:
+1. Group Management:
+   - GET /api/groups/:groupId
+   - GET /api/groups/:groupId/members
+
+2. Transaction Management:
+   - GET /api/groups/:groupId/transactions
+   - GET /api/groups/:groupId/balances
+
+3. Settlement Management:
+   - PUT /api/groups/:groupId/settle-up-mode
+   - PUT /api/groups/:groupId/settlement-status
+   - GET /api/groups/:groupId/settlement-status
+
+Data Models:
+
+1. Group:
+{
+  _id: string
+  name: string
+  members: Array<Member>
+  createdBy: Member
+  isSettleUpMode: Array<SettleUpMode>
+}
+
+2. Member:
+{
+  _id: string
+  name: string
+  phoneNumber: string
+  avatar: string
+}
+
+3. Transaction:
+{
+  _id: string
+  title: string
+  amount: number
+  category: string
+  paidBy: Member
+  splitBetween: Array<Member>
+  createdAt: Date
+  settlements: Array<Settlement>
+}
+
+4. Settlement:
+{
+  user: Member
+  amount: number
+  status: string
+  paidAt: Date
+  settledBy: Member
+}
+
+This documentation provides a foundation for rebuilding the app with core features. The actual implementation can be built step by step following this structure. 
