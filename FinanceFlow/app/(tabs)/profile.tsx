@@ -1,11 +1,11 @@
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
-import HomePage from '../../components/HomePage';
+import Profile from '../../components/tabs/Profile';
 
-export default function HomeScreen() {
+export default function ProfileScreen() {
   return (
     <View style={styles.container}>
-      <HomePage />
+      <Profile />
     </View>
   );
 }

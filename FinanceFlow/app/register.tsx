@@ -1,11 +1,11 @@
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
-import HomePage from '../../components/HomePage';
+import Register from '../components/Register';
 
-export default function HomeScreen() {
+export default function RegisterScreen() {
   return (
     <View style={styles.container}>
-      <HomePage />
+      <Register />
     </View>
   );
 }

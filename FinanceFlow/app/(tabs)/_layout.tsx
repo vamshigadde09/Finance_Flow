@@ -23,6 +23,27 @@ export default function TabLayout() {
           tabBarIcon: ({ color }) => <Ionicons name="home" size={28} color={color} />,
         }}
       />
+      <Tabs.Screen
+        name="groups"
+        options={{
+          title: 'Groups',
+          tabBarIcon: ({ color }) => <Ionicons name="people" size={28} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="stats"
+        options={{
+          title: 'Stats',
+          tabBarIcon: ({ color }) => <Ionicons name="bar-chart" size={28} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="profile"
+        options={{
+          title: 'Profile',
+          tabBarIcon: ({ color }) => <Ionicons name="person" size={28} color={color} />,
+        }}
+      />
     </Tabs>
   );
 }

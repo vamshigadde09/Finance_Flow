@@ -1,11 +1,11 @@
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
-import HomePage from '../../components/HomePage';
+import Stats from '../../components/tabs/Stats';
 
-export default function HomeScreen() {
+export default function StatsScreen() {
   return (
     <View style={styles.container}>
-      <HomePage />
+      <Stats />
     </View>
   );
 }

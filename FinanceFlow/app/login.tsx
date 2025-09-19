@@ -1,11 +1,12 @@
 import React from 'react';
-import { View, StyleSheet } from 'react-native';
-import HomePage from '../../components/HomePage';
+import { View, Text, StyleSheet } from 'react-native';
+import { router } from 'expo-router';
+import Login from '../components/Login';
 
-export default function HomeScreen() {
+export default function LoginScreen() {
   return (
     <View style={styles.container}>
-      <HomePage />
+      <Login />
     </View>
   );
 }

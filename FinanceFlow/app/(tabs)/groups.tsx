@@ -1,11 +1,11 @@
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
-import HomePage from '../../components/HomePage';
+import SplitGroups from '../../components/tabs/Groups/SplitGroups';
 
-export default function HomeScreen() {
+export default function GroupsScreen() {
   return (
     <View style={styles.container}>
-      <HomePage />
+      <SplitGroups />
     </View>
   );
 }
