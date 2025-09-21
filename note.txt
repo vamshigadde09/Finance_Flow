@@ -1,0 +1,4 @@
+   cd android
+   ./gradlew assembleRelease
+
+   npx expo prebuild --platform android --clean
