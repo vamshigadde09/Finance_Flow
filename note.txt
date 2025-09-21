@@ -1,20 +1,82 @@
-cd android
-./gradlew assembleRelease
-cd..
-npx expo prebuild --platform android --clean
-npm install -g @expo/eas-cli
-npm install -g eas-cli
-eas build:configure
+=== ANDROID BUILD COMMANDS ===
+
+If you want to build a fresh APK (recommended):
+cd FinanceFlow
+npx expo install --fix 
+npx expo run:android --variant release
+
+If you want to build and copy the APK:
+cd FinanceFlow
+npx expo install --fix 
+npx expo run:android --variant release 
+copy android\app\build\outputs\apk\release\app-release.apk FinanceFlow-Release.apk
+
+If you want to use EAS Build (cloud build):
+cd FinanceFlow 
 eas build --platform android --profile preview
+
+Complete Android build process (if starting fresh):
+cd FinanceFlow
 npx expo install --fix
 npx expo run:android --variant release
 dir android\app\build\outputs\apk\release\
 copy android\app\build\outputs\apk\release\app-release.apk FinanceFlow-Release.apk
 
+=== iOS BUILD COMMANDS ===
 
+If you want to build a fresh iOS app (recommended):
+cd FinanceFlow
+npx expo install --fix
+npx expo run:ios --variant release
 
+If you want to use EAS Build for iOS (cloud build):
+cd FinanceFlow
+eas build --platform ios --profile preview
 
-cd ..; git status
+Complete iOS build process (if starting fresh):
+cd FinanceFlow
+npx expo install --fix
+npx expo run:ios --variant release
+
+=== BUILD BOTH PLATFORMS ===
+
+Option 1: EAS Build (Cloud - Recommended):
+cd FinanceFlow
+eas build --platform all --profile preview
+
+Option 2: Local Build (macOS only):
+cd FinanceFlow
+npx expo install --fix
+npx expo run:android --variant release &
+npx expo run:ios --variant release
+
+Option 3: Sequential Build (Windows - Android local, iOS cloud):
+cd FinanceFlow
+npx expo install --fix
+npx expo run:android --variant release
+copy android\app\build\outputs\apk\release\app-release.apk FinanceFlow-Android.apk
+eas build --platform ios --profile preview
+
+=== REQUIREMENTS ===
+Android: Windows/Mac/Linux, Android Studio, Android device/emulator
+iOS: macOS only, Xcode, iOS device/simulator, Apple Developer Account
+
+=== GIT COMMANDS ===
+
+Check status and push changes:
+cd ..
+git status
 git add .
-git commit -m "Add EAS build configuration and generate release APK
+git commit -m "Add iOS build commands and update build documentation"
+git push origin main
+
+Check repository URL:
+git remote -v
+
+Complete Git workflow:
+cd ..
+git status
+git add .
+git commit -m "Update project with latest changes"
+git push origin main
 git push origin main
