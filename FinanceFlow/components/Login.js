@@ -50,6 +50,7 @@ const Login = () => {
     const [error, setError] = useState('');
     const [showWelcome, setShowWelcome] = useState(false);
     const [welcomeOpacity] = useState(new Animated.Value(0));
+    const [isNewUser, setIsNewUser] = useState(false);
     const navigation = useNavigation();
 
     const storeUserData = async (user) => {
@@ -81,6 +82,10 @@ const Login = () => {
                 // Get token from AsyncStorage
                 const token = await AsyncStorage.getItem('token');
                 let guideCompleted = false;
+
+                // Check if user is new by checking if guide is completed
+                const localGuideCompleted = await checkUserGuideStatus();
+                setIsNewUser(!localGuideCompleted);
 
                 if (token) {
                     try {
@@ -228,16 +233,20 @@ const Login = () => {
                 <Animated.View style={[styles.welcomeOverlay, { opacity: welcomeOpacity }]}>
                     <View style={styles.welcomeMessage}>
                         <Ionicons name="checkmark-circle" size={48} color="#10b981" />
-                        <Text style={styles.welcomeText}>Welcome Back!</Text>
-                        <Text style={styles.welcomeSubtext}>Login successful</Text>
+                        <Text style={styles.welcomeText}>
+                            {isNewUser ? "Welcome to Finance Flow!" : "Welcome Back!"}
+                        </Text>
+                        <Text style={styles.welcomeSubtext}>
+                            {isNewUser ? "Let's get started" : "Login successful"}
+                        </Text>
                     </View>
                 </Animated.View>
             )}
 
             <KeyboardAvoidingView
                 style={styles.keyboardContainer}
-                behavior={Platform.OS === "ios" ? "padding" : undefined}
-                keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}
+                behavior={Platform.OS === "ios" ? "padding" : "height"}
+                keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
             >
                 <View style={styles.contentContainer}>
                     <View style={styles.card}>

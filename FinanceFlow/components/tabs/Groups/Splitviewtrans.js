@@ -12,6 +12,7 @@ import {
     TextInput,
     Dimensions,
     StatusBar,
+    Alert,
 } from "react-native";
 import axios from "axios";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -27,6 +28,7 @@ const screenWidth = Dimensions.get("window").width;
 const ViewTransaction = ({ currentUserId: propCurrentUserId }) => {
     const navigation = useNavigation();
     const route = useRoute();
+
     const { groupData } = route.params || {};
     const [transactions, setTransactions] = useState([]);
     const [transactionLoading, setTransactionLoading] = useState(false);
@@ -45,6 +47,8 @@ const ViewTransaction = ({ currentUserId: propCurrentUserId }) => {
     const [showFullDetails, setShowFullDetails] = useState(false);
     const [fullDetailsTransaction, setFullDetailsTransaction] = useState(null);
     const [showSearchInput, setShowSearchInput] = useState(false);
+    const [deleteModalVisible, setDeleteModalVisible] = useState(false);
+    const [transactionToDelete, setTransactionToDelete] = useState(null);
 
     useEffect(() => {
         const getCurrentUserId = async () => {
@@ -165,6 +169,88 @@ const ViewTransaction = ({ currentUserId: propCurrentUserId }) => {
     const handlePrevPage = () => {
         if (pagination.currentPage > 1) {
             fetchTransactions(pagination.currentPage - 1);
+        }
+    };
+
+    const handleDeleteTransaction = (transaction) => {
+        setTransactionToDelete(transaction);
+        setDeleteModalVisible(true);
+    };
+
+    const handleEditTransaction = (transaction) => {
+        try {
+            if (navigation && navigation.navigate) {
+                navigation.navigate('SplitTransactions', {
+                    groupName: groupData?.name,
+                    groupId: groupData?._id,
+                    selectedMembers: transaction.splitBetween || [],
+                    groupData: groupData,
+                    transactionToEdit: transaction,
+                    isEditMode: true
+                });
+            } else {
+                console.error('Navigation not available:', navigation);
+                Alert.alert('Error', 'Navigation not available. Please try again.');
+            }
+        } catch (error) {
+            console.error('Navigation error:', error);
+            Alert.alert('Error', 'Failed to navigate. Please try again.');
+        }
+    };
+
+    const performDeleteTransaction = async (transaction) => {
+        try {
+            const token = await AsyncStorage.getItem('token');
+            if (!token) {
+                Alert.alert('Error', 'Please login again');
+                return;
+            }
+
+            console.log('Deleting transaction:', transaction._id);
+            const deleteUrl = `${API_BASE_URL}/api/v1/splits/group-transactions/${transaction._id}`;
+
+            const response = await axios.delete(deleteUrl, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+
+            console.log('Delete response:', response.data);
+
+            if (response.data.success) {
+                // Remove the transaction from local state
+                setTransactions(prev => prev.filter(t => t._id !== transaction._id));
+
+                // Close modals
+                setDeleteModalVisible(false);
+                setTransactionToDelete(null);
+                setSelectedTransaction(null);
+
+                Alert.alert('Success', 'Group transaction deleted successfully. All group members have been notified.');
+            } else {
+                setDeleteModalVisible(false);
+                setTransactionToDelete(null);
+                Alert.alert('Error', response.data.message || 'Failed to delete transaction');
+            }
+        } catch (error) {
+            console.error('Error deleting transaction:', error);
+
+            setDeleteModalVisible(false);
+            setTransactionToDelete(null);
+
+            let errorMessage = 'Failed to delete transaction. Please try again.';
+
+            if (error.response) {
+                if (error.response.status === 404) {
+                    errorMessage = 'Transaction not found or delete endpoint not available.';
+                } else if (error.response.status === 403) {
+                    errorMessage = 'You do not have permission to delete this transaction.';
+                } else if (error.response.status === 401) {
+                    errorMessage = 'Please login again to delete transactions.';
+                } else if (error.response.data?.message) {
+                    errorMessage = error.response.data.message;
+                }
+            }
+
+            Alert.alert('Error', errorMessage);
         }
     };
 
@@ -347,7 +433,64 @@ const ViewTransaction = ({ currentUserId: propCurrentUserId }) => {
                     setSelectedTransaction(null);
                     setShowFullDetails(true);
                 }}
+                onDelete={handleDeleteTransaction}
+                onEdit={handleEditTransaction}
+                currentUserId={currentUserId}
             />
+
+            {/* Delete Confirmation Modal */}
+            <Modal
+                visible={deleteModalVisible}
+                transparent
+                animationType="fade"
+                onRequestClose={() => setDeleteModalVisible(false)}
+            >
+                <View style={styles.deleteModalOverlay}>
+                    <View style={styles.deleteModalContainer}>
+                        <View style={styles.deleteModalHeader}>
+                            <View style={styles.deleteModalIconContainer}>
+                                <Ionicons name="warning" size={32} color="#f59e0b" />
+                            </View>
+                            <Text style={styles.deleteModalTitle}>Delete Group Transaction</Text>
+                        </View>
+
+                        <View style={styles.deleteModalContent}>
+                            <Text style={styles.deleteModalText}>
+                                This transaction is part of "{groupData?.name || 'the group'}" and involves other members.
+                            </Text>
+                            <Text style={styles.deleteModalSubtext}>
+                                Deleting this transaction will:
+                            </Text>
+                            <View style={styles.deleteModalList}>
+                                <Text style={styles.deleteModalListItem}>• Remove it from all group members' records</Text>
+                                <Text style={styles.deleteModalListItem}>• Update everyone's balances and settlements</Text>
+                                <Text style={styles.deleteModalListItem}>• Affect the group's financial calculations</Text>
+                            </View>
+                            <Text style={styles.deleteModalWarning}>
+                                This action cannot be undone.
+                            </Text>
+                        </View>
+
+                        <View style={styles.deleteModalButtons}>
+                            <TouchableOpacity
+                                style={styles.deleteModalCancelButton}
+                                onPress={() => {
+                                    setDeleteModalVisible(false);
+                                    setTransactionToDelete(null);
+                                }}
+                            >
+                                <Text style={styles.deleteModalCancelText}>Cancel</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={styles.deleteModalDeleteButton}
+                                onPress={() => performDeleteTransaction(transactionToDelete)}
+                            >
+                                <Text style={styles.deleteModalDeleteText}>Delete</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
 
             {/* Full Transaction Details Screen */}
             <TransactionDetailsScreen
@@ -394,8 +537,20 @@ const formatDate = (dateString) => {
 };
 
 // Add to styles:
-const TransactionDetailModal = ({ visible, transaction, onClose, onViewFullDetails }) => {
+const TransactionDetailModal = ({ visible, transaction, onClose, onViewFullDetails, onDelete, onEdit, currentUserId }) => {
     if (!transaction) return null;
+
+    // Check if current user paid for this transaction and no settlements are paid/success
+    const canDelete = transaction.paidBy && String(transaction.paidBy._id) === String(currentUserId);
+
+    // Check if any settlements are paid or success
+    const hasPaidSettlements = transaction.settlements && transaction.settlements.some(
+        settlement => settlement.status === 'paid' || settlement.status === 'success'
+    );
+
+    // Can edit/delete only if user paid and no settlements are paid/success
+    const canEditOrDelete = canDelete && !hasPaidSettlements;
+
     return (
         <Modal visible={visible} animationType="slide" transparent>
             <View style={styles.modalOverlay}>
@@ -492,13 +647,37 @@ const TransactionDetailModal = ({ visible, transaction, onClose, onViewFullDetai
                                 );
                             })}
                         </View>
-                        <TouchableOpacity
-                            style={styles.viewFullDetailsBtn}
-                            onPress={onViewFullDetails}
-                        >
-                            <Ionicons name="document-text-outline" size={18} color="#FFFFFF" />
-                            <Text style={styles.viewFullDetailsBtnText}>View Full Details</Text>
-                        </TouchableOpacity>
+                        <View style={styles.actionButtonsContainer}>
+                            <TouchableOpacity
+                                style={styles.viewFullDetailsBtn}
+                                onPress={onViewFullDetails}
+                            >
+                                <Ionicons name="document-text-outline" size={18} color="#FFFFFF" />
+                                <Text style={styles.viewFullDetailsBtnText}>View Full Details</Text>
+                            </TouchableOpacity>
+                            {canEditOrDelete && (
+                                <TouchableOpacity
+                                    style={styles.editTransactionBtn}
+                                    onPress={() => {
+                                        onClose();
+                                        onEdit(transaction);
+                                    }}
+                                >
+                                    <Ionicons name="create-outline" size={20} color="#FFFFFF" />
+                                </TouchableOpacity>
+                            )}
+                            {canEditOrDelete && (
+                                <TouchableOpacity
+                                    style={styles.deleteTransactionBtn}
+                                    onPress={() => {
+                                        onClose();
+                                        onDelete(transaction);
+                                    }}
+                                >
+                                    <Ionicons name="trash-outline" size={20} color="#FFFFFF" />
+                                </TouchableOpacity>
+                            )}
+                        </View>
                     </ScrollView>
                 </View>
             </View>
@@ -1297,8 +1476,8 @@ const styles = StyleSheet.create({
         paddingHorizontal: 24,
         alignItems: 'center',
         justifyContent: 'center',
-        marginTop: 24,
         flexDirection: 'row',
+        flex: 1,
         shadowColor: '#8b5cf6',
         shadowOffset: { width: 0, height: 6 },
         shadowOpacity: 0.25,
@@ -1311,5 +1490,163 @@ const styles = StyleSheet.create({
         fontSize: 16,
         marginLeft: 8,
         letterSpacing: 0.3,
+    },
+    actionButtonsContainer: {
+        flexDirection: 'row',
+        gap: 12,
+        marginTop: 24,
+    },
+    editTransactionBtn: {
+        backgroundColor: '#3b82f6',
+        borderRadius: 16,
+        paddingVertical: 16,
+        paddingHorizontal: 16,
+        alignItems: 'center',
+        justifyContent: 'center',
+        width: 56,
+        height: 56,
+        shadowColor: '#3b82f6',
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.25,
+        shadowRadius: 12,
+        elevation: 6,
+    },
+    deleteTransactionBtn: {
+        backgroundColor: '#ef4444',
+        borderRadius: 16,
+        paddingVertical: 16,
+        paddingHorizontal: 16,
+        alignItems: 'center',
+        justifyContent: 'center',
+        width: 56,
+        height: 56,
+        shadowColor: '#ef4444',
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.25,
+        shadowRadius: 12,
+        elevation: 6,
+    },
+    // Modal Header Styles
+    modalHeaderLeft: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        flex: 1,
+    },
+    modalDeleteIcon: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        backgroundColor: '#fef2f2',
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderWidth: 1,
+        borderColor: '#fecaca',
+    },
+    // Delete Modal Styles
+    deleteModalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        paddingHorizontal: 20,
+    },
+    deleteModalContainer: {
+        backgroundColor: '#fff',
+        borderRadius: 20,
+        padding: 24,
+        width: '100%',
+        maxWidth: 400,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.25,
+        shadowRadius: 20,
+        elevation: 10,
+    },
+    deleteModalHeader: {
+        alignItems: 'center',
+        marginBottom: 20,
+    },
+    deleteModalIconContainer: {
+        width: 64,
+        height: 64,
+        borderRadius: 32,
+        backgroundColor: '#fef3c7',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: 16,
+    },
+    deleteModalTitle: {
+        fontSize: 20,
+        fontWeight: '700',
+        color: '#1e293b',
+        textAlign: 'center',
+    },
+    deleteModalContent: {
+        marginBottom: 24,
+    },
+    deleteModalText: {
+        fontSize: 16,
+        color: '#64748b',
+        lineHeight: 24,
+        textAlign: 'center',
+        marginBottom: 16,
+    },
+    deleteModalSubtext: {
+        fontSize: 16,
+        color: '#374151',
+        fontWeight: '600',
+        marginBottom: 12,
+        textAlign: 'center',
+    },
+    deleteModalList: {
+        marginBottom: 16,
+    },
+    deleteModalListItem: {
+        fontSize: 14,
+        color: '#64748b',
+        lineHeight: 20,
+        marginBottom: 8,
+        paddingLeft: 8,
+    },
+    deleteModalWarning: {
+        fontSize: 14,
+        color: '#ef4444',
+        fontWeight: '600',
+        textAlign: 'center',
+        backgroundColor: '#fef2f2',
+        padding: 12,
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: '#fecaca',
+    },
+    deleteModalButtons: {
+        flexDirection: 'row',
+        gap: 12,
+    },
+    deleteModalCancelButton: {
+        flex: 1,
+        alignItems: 'center',
+        paddingVertical: 14,
+        borderRadius: 12,
+        backgroundColor: '#f8fafc',
+        borderWidth: 1,
+        borderColor: '#e5e7eb',
+    },
+    deleteModalCancelText: {
+        color: '#64748b',
+        fontSize: 16,
+        fontWeight: '600',
+    },
+    deleteModalDeleteButton: {
+        flex: 1,
+        alignItems: 'center',
+        paddingVertical: 14,
+        borderRadius: 12,
+        backgroundColor: '#ef4444',
+    },
+    deleteModalDeleteText: {
+        color: '#fff',
+        fontSize: 16,
+        fontWeight: '600',
     },
 });

@@ -382,6 +382,8 @@ const SplitGroups = () => {
     const [menuVisible, setMenuVisible] = useState(false);
     const [notificationVisible, setNotificationVisible] = useState(false);
     const [showAllTransactions, setShowAllTransactions] = useState(false);
+    const [deleteGroupModal, setDeleteGroupModal] = useState(false);
+    const [leaveGroupModal, setLeaveGroupModal] = useState(false);
     const [expandedTransactionId, setExpandedTransactionId] = useState(null);
     const [refreshing, setRefreshing] = useState(false);
     const [transactions, setTransactions] = useState([]);
@@ -874,6 +876,120 @@ const SplitGroups = () => {
 
         return notifications;
     }, [settlementStatuses, currentUserId, groupData, members, memberBalances]);
+
+    // Check if current user is the group creator
+    const isGroupCreator = useMemo(() => {
+        return currentUserId && groupData?.createdBy?._id &&
+            String(currentUserId) === String(groupData.createdBy._id);
+    }, [currentUserId, groupData?.createdBy?._id]);
+
+    // Delete group function (only for creator)
+    const handleDeleteGroup = () => {
+        if (!isGroupCreator) return;
+        setDeleteGroupModal(true);
+    };
+
+    const confirmDeleteGroup = async () => {
+        try {
+            const token = await AsyncStorage.getItem("token");
+            if (!token) {
+                Alert.alert("Error", "Please login again");
+                return;
+            }
+
+            const response = await axios.delete(
+                `${API_BASE_URL}/api/v1/splits/group/${groupData._id}`,
+                {
+                    headers: { Authorization: `Bearer ${token}` }
+                }
+            );
+
+            if (response.data.success) {
+                setDeleteGroupModal(false);
+                navigation.goBack();
+            } else {
+                Alert.alert("Error", response.data.message || "Failed to delete group");
+            }
+        } catch (error) {
+            console.error("Error deleting group:", error);
+            Alert.alert("Error", "Failed to delete group. Please try again.");
+        }
+    };
+
+    // Leave group function (for non-creators)
+    const handleLeaveGroup = () => {
+        if (isGroupCreator) return;
+        setLeaveGroupModal(true);
+    };
+
+    const confirmLeaveGroup = async () => {
+        try {
+            const token = await AsyncStorage.getItem("token");
+            if (!token) {
+                Alert.alert("Error", "Please login again");
+                return;
+            }
+
+            const response = await axios.post(
+                `${API_BASE_URL}/api/v1/splits/leave-group`,
+                { groupId: groupData._id },
+                {
+                    headers: { Authorization: `Bearer ${token}` }
+                }
+            );
+
+            if (response.data.success) {
+                setLeaveGroupModal(false);
+                navigation.goBack();
+                
+            } else {
+                Alert.alert("Error", response.data.message || "Failed to leave group");
+            }
+        } catch (error) {
+            console.error("Error leaving group:", error);
+            Alert.alert("Error", "Failed to leave group. Please try again.");
+        }
+    };
+
+    // Add member function
+    const handleAddMember = async () => {
+        setMenuVisible(false); // Close the menu first
+
+        try {
+            // Fetch fresh group details with populated members
+            const token = await AsyncStorage.getItem("token");
+            if (!token) {
+                Alert.alert("Error", "Please login again");
+                return;
+            }
+
+            const response = await axios.get(
+                `${API_BASE_URL}/api/v1/splits/group/${groupData._id}`,
+                {
+                    headers: { Authorization: `Bearer ${token}` }
+                }
+            );
+
+            if (response.data.success) {
+                const groupDetails = response.data.group;
+                const populatedMembers = groupDetails.members || [];
+
+                console.log("=== FETCHED GROUP DETAILS ===");
+                console.log("Group details:", groupDetails);
+                console.log("Populated members:", populatedMembers);
+
+                navigation.navigate('CreateSplitGroup', {
+                    groupData: groupData,
+                    members: populatedMembers
+                });
+            } else {
+                Alert.alert("Error", "Failed to fetch group details");
+            }
+        } catch (error) {
+            console.error("Error fetching group details:", error);
+            Alert.alert("Error", "Failed to fetch group details");
+        }
+    };
 
     // Update pendingConfirmations when modal opens or statuses change
     useEffect(() => {
@@ -1748,6 +1864,43 @@ const SplitGroups = () => {
                             <Text style={{ fontSize: 15 }}>View Templates</Text>
                         </TouchableOpacity>
 
+                        {/* Add Member - Available to everyone */}
+                        <TouchableOpacity
+                            style={{ padding: 16, borderTopWidth: 1, borderTopColor: '#f0f0f0' }}
+                            onPress={() => {
+                                setMenuVisible(false);
+                                handleAddMember();
+                            }}
+                        >
+                            <Text style={{ fontSize: 15 }}>Add Member</Text>
+                        </TouchableOpacity>
+
+                        {/* Delete Group - Only for creator */}
+                        {isGroupCreator && (
+                            <TouchableOpacity
+                                style={{ padding: 16, borderTopWidth: 1, borderTopColor: '#f0f0f0' }}
+                                onPress={() => {
+                                    setMenuVisible(false);
+                                    handleDeleteGroup();
+                                }}
+                            >
+                                <Text style={{ fontSize: 15, color: '#ef4444' }}>Delete Group</Text>
+                            </TouchableOpacity>
+                        )}
+
+                        {/* Leave Group - Only for non-creators */}
+                        {!isGroupCreator && (
+                            <TouchableOpacity
+                                style={{ padding: 16, borderTopWidth: 1, borderTopColor: '#f0f0f0' }}
+                                onPress={() => {
+                                    setMenuVisible(false);
+                                    handleLeaveGroup();
+                                }}
+                            >
+                                <Text style={{ fontSize: 15, color: '#ef4444' }}>Leave Group</Text>
+                            </TouchableOpacity>
+                        )}
+
                     </View>
                 </TouchableOpacity>
             </Modal>
@@ -2044,6 +2197,105 @@ const SplitGroups = () => {
                             </ScrollView>
                         </View>
 
+                    </View>
+                </View>
+            </Modal>
+
+            {/* Delete Group Modal */}
+            <Modal
+                visible={deleteGroupModal}
+                transparent
+                animationType="fade"
+                onRequestClose={() => setDeleteGroupModal(false)}
+            >
+                <View style={styles.modalOverlay}>
+                    <View style={styles.confirmationModalContainer}>
+                        <View style={styles.confirmationModalHeader}>
+                            <View style={styles.confirmationModalIconContainer}>
+                                <Ionicons name="warning" size={32} color="#ef4444" />
+                            </View>
+                            <Text style={styles.confirmationModalTitle}>Delete Group</Text>
+                            <Text style={styles.confirmationModalSubtitle}>
+                                Are you sure you want to delete "{groupData?.name}"?
+                            </Text>
+                        </View>
+
+                        <View style={styles.confirmationModalContent}>
+                            <Text style={styles.confirmationModalText}>
+                                This action cannot be undone and will permanently remove:
+                            </Text>
+                            <View style={styles.confirmationModalList}>
+                                <Text style={styles.confirmationModalListItem}>• All transactions and expenses</Text>
+                                <Text style={styles.confirmationModalListItem}>• All member data and balances</Text>
+                                <Text style={styles.confirmationModalListItem}>• All group settings and history</Text>
+                            </View>
+                        </View>
+
+                        <View style={styles.confirmationModalButtons}>
+                            <TouchableOpacity
+                                style={styles.confirmationModalCancelButton}
+                                onPress={() => setDeleteGroupModal(false)}
+                            >
+                                <Text style={styles.confirmationModalCancelText}>Cancel</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={styles.confirmationModalDeleteButton}
+                                onPress={confirmDeleteGroup}
+                            >
+                                <Text style={styles.confirmationModalDeleteText}>Delete Group</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
+
+            {/* Leave Group Modal */}
+            <Modal
+                visible={leaveGroupModal}
+                transparent
+                animationType="fade"
+                onRequestClose={() => setLeaveGroupModal(false)}
+            >
+                <View style={styles.modalOverlay}>
+                    <View style={styles.confirmationModalContainer}>
+                        <View style={styles.confirmationModalHeader}>
+                            <View style={styles.confirmationModalIconContainer}>
+                                <Ionicons name="exit-outline" size={32} color="#f59e0b" />
+                            </View>
+                            <Text style={styles.confirmationModalTitle}>Leave Group</Text>
+                            <Text style={styles.confirmationModalSubtitle}>
+                                Are you sure you want to leave "{groupData?.name}"?
+                            </Text>
+                        </View>
+
+                        <View style={styles.confirmationModalContent}>
+                            <Text style={styles.confirmationModalText}>
+                                You will no longer have access to:
+                            </Text>
+                            <View style={styles.confirmationModalList}>
+                                <Text style={styles.confirmationModalListItem}>• Group transactions and expenses</Text>
+                                <Text style={styles.confirmationModalListItem}>• Group balances and settlements</Text>
+                                <Text style={styles.confirmationModalListItem}>• Group notifications and updates</Text>
+                            </View>
+                            <Text style={styles.confirmationModalNote}>
+                                You can rejoin if another member adds you back.
+                            </Text>
+                        </View>
+
+                        <View style={styles.confirmationModalButtons}>
+                            <TouchableOpacity
+                                style={styles.confirmationModalCancelButton}
+                                onPress={() => setLeaveGroupModal(false)}
+                            >
+                                <Text style={styles.confirmationModalCancelText}>Cancel</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={styles.confirmationModalLeaveButton}
+                                onPress={confirmLeaveGroup}
+                            >
+                                <Text style={styles.confirmationModalLeaveText}>Leave Group</Text>
+                            </TouchableOpacity>
+                        </View>
                     </View>
                 </View>
             </Modal>
@@ -3403,6 +3655,125 @@ const styles = StyleSheet.create({
         color: '#ffffff',
         fontSize: 14,
         fontWeight: '600',
+    },
+    // Confirmation Modal Styles
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 20,
+    },
+    confirmationModalContainer: {
+        backgroundColor: '#ffffff',
+        borderRadius: 20,
+        width: '100%',
+        maxWidth: 400,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.25,
+        shadowRadius: 10,
+        elevation: 8,
+    },
+    confirmationModalHeader: {
+        alignItems: 'center',
+        padding: 24,
+        paddingBottom: 16,
+    },
+    confirmationModalIconContainer: {
+        width: 64,
+        height: 64,
+        borderRadius: 32,
+        backgroundColor: 'rgba(239, 68, 68, 0.1)',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: 16,
+    },
+    confirmationModalTitle: {
+        fontSize: 20,
+        fontWeight: '700',
+        color: '#1f2937',
+        marginBottom: 8,
+        textAlign: 'center',
+    },
+    confirmationModalSubtitle: {
+        fontSize: 16,
+        color: '#6b7280',
+        textAlign: 'center',
+        lineHeight: 22,
+    },
+    confirmationModalContent: {
+        paddingHorizontal: 24,
+        paddingBottom: 16,
+    },
+    confirmationModalText: {
+        fontSize: 14,
+        color: '#374151',
+        lineHeight: 20,
+        marginBottom: 12,
+    },
+    confirmationModalList: {
+        marginBottom: 12,
+    },
+    confirmationModalListItem: {
+        fontSize: 14,
+        color: '#6b7280',
+        lineHeight: 20,
+        marginBottom: 4,
+    },
+    confirmationModalNote: {
+        fontSize: 12,
+        color: '#9ca3af',
+        fontStyle: 'italic',
+        lineHeight: 16,
+    },
+    confirmationModalButtons: {
+        flexDirection: 'row',
+        padding: 24,
+        paddingTop: 16,
+        gap: 12,
+    },
+    confirmationModalCancelButton: {
+        flex: 1,
+        paddingVertical: 12,
+        paddingHorizontal: 20,
+        borderRadius: 12,
+        backgroundColor: '#f3f4f6',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    confirmationModalCancelText: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: '#6b7280',
+    },
+    confirmationModalDeleteButton: {
+        flex: 1,
+        paddingVertical: 12,
+        paddingHorizontal: 20,
+        borderRadius: 12,
+        backgroundColor: '#ef4444',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    confirmationModalDeleteText: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: '#ffffff',
+    },
+    confirmationModalLeaveButton: {
+        flex: 1,
+        paddingVertical: 12,
+        paddingHorizontal: 20,
+        borderRadius: 12,
+        backgroundColor: '#f59e0b',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    confirmationModalLeaveText: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: '#ffffff',
     },
 });
 

@@ -26,6 +26,7 @@ const AllContacts = ({ navigation }) => {
     const [searchQuery, setSearchQuery] = useState("");
     const [isLoading, setIsLoading] = useState(true);
     const [pulseAnim] = useState(new Animated.Value(1));
+    const [skeletonAnim] = useState(new Animated.Value(0));
 
     useEffect(() => {
         const fetchData = async () => {
@@ -92,6 +93,30 @@ const AllContacts = ({ navigation }) => {
         Animated.loop(pulseAnimation).start();
     }, []);
 
+    // Skeleton animation effect
+    useEffect(() => {
+        const startSkeletonAnimation = () => {
+            Animated.loop(
+                Animated.sequence([
+                    Animated.timing(skeletonAnim, {
+                        toValue: 1,
+                        duration: 1000,
+                        useNativeDriver: true,
+                    }),
+                    Animated.timing(skeletonAnim, {
+                        toValue: 0,
+                        duration: 1000,
+                        useNativeDriver: true,
+                    }),
+                ])
+            ).start();
+        };
+
+        if (isLoading) {
+            startSkeletonAnimation();
+        }
+    }, [isLoading, skeletonAnim]);
+
     const fetchRegisteredUsers = async () => {
         try {
             const userData = await AsyncStorage.getItem("userData");
@@ -143,6 +168,68 @@ const AllContacts = ({ navigation }) => {
         return registeredContacts.includes(normalizedContactNumber);
     };
 
+    // Skeleton loading component
+    const SkeletonContactItem = () => (
+        <View style={styles.skeletonContactItem}>
+            <Animated.View
+                style={[
+                    styles.skeletonAvatar,
+                    {
+                        opacity: skeletonAnim.interpolate({
+                            inputRange: [0, 1],
+                            outputRange: [0.3, 0.7],
+                        }),
+                    }
+                ]}
+            />
+            <View style={styles.skeletonContactInfo}>
+                <Animated.View
+                    style={[
+                        styles.skeletonName,
+                        {
+                            opacity: skeletonAnim.interpolate({
+                                inputRange: [0, 1],
+                                outputRange: [0.3, 0.7],
+                            }),
+                        }
+                    ]}
+                />
+                <Animated.View
+                    style={[
+                        styles.skeletonNumber,
+                        {
+                            opacity: skeletonAnim.interpolate({
+                                inputRange: [0, 1],
+                                outputRange: [0.3, 0.7],
+                            }),
+                        }
+                    ]}
+                />
+            </View>
+        </View>
+    );
+
+    const SkeletonLoading = () => (
+        <View style={styles.skeletonContainer}>
+            <Animated.View
+                style={[
+                    styles.skeletonSearchBar,
+                    {
+                        opacity: skeletonAnim.interpolate({
+                            inputRange: [0, 1],
+                            outputRange: [0.3, 0.7],
+                        }),
+                    }
+                ]}
+            />
+            <View style={styles.skeletonContactsList}>
+                {[1, 2, 3, 4, 5, 6, 7, 8].map((index) => (
+                    <SkeletonContactItem key={index} />
+                ))}
+            </View>
+        </View>
+    );
+
     const renderItem = ({ item }) => (
         <TouchableOpacity
             style={styles.contactItem}
@@ -190,13 +277,7 @@ const AllContacts = ({ navigation }) => {
     if (isLoading) {
         return (
             <SafeAreaView style={styles.loadingContainer}>
-                <View style={styles.loadingContent}>
-                    <View style={styles.loadingIcon}>
-                        <Ionicons name="people-outline" size={48} color="#8b5cf6" />
-                    </View>
-                    <ActivityIndicator size="large" color="#8b5cf6" style={styles.loadingSpinner} />
-                    <Text style={styles.loadingText}>Loading contacts...</Text>
-                </View>
+                <SkeletonLoading />
             </SafeAreaView>
         );
     }
@@ -571,5 +652,59 @@ const styles = StyleSheet.create({
         textAlign: 'center',
         lineHeight: 20,
         letterSpacing: 0.3,
+    },
+    // Skeleton Loading Styles
+    skeletonContainer: {
+        flex: 1,
+        backgroundColor: '#f7fafd',
+    },
+    skeletonSearchBar: {
+        height: 45,
+        backgroundColor: '#e5e7eb',
+        borderRadius: 12,
+        margin: 20,
+        marginBottom: 10,
+    },
+    skeletonContactsList: {
+        flex: 1,
+        paddingHorizontal: 20,
+    },
+    skeletonContactItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#fff',
+        padding: 16,
+        borderRadius: 16,
+        marginBottom: 12,
+        borderWidth: 1,
+        borderColor: '#e5e7eb',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.05,
+        shadowRadius: 2,
+        elevation: 1,
+    },
+    skeletonAvatar: {
+        width: 48,
+        height: 48,
+        borderRadius: 24,
+        backgroundColor: '#e5e7eb',
+        marginRight: 16,
+    },
+    skeletonContactInfo: {
+        flex: 1,
+    },
+    skeletonName: {
+        height: 16,
+        backgroundColor: '#e5e7eb',
+        borderRadius: 8,
+        marginBottom: 8,
+        width: '70%',
+    },
+    skeletonNumber: {
+        height: 14,
+        backgroundColor: '#e5e7eb',
+        borderRadius: 7,
+        width: '50%',
     },
 });

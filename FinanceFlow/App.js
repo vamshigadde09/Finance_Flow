@@ -14,6 +14,7 @@ import Login from './components/Login';
 import Register from './components/Register';
 import Dashboard from './components/tabs/Homepage/dashbord';
 import SplitGroups from './components/tabs/Groups/SplitGroups';
+import ArchiveGroup from './components/tabs/Groups/ArchiveGroup';
 import Stats from './components/tabs/Stats';
 import Profile from './components/tabs/Profile';
 import CreateSplitGroup from './components/tabs/Groups/CreateSplitGroup';
@@ -122,6 +123,10 @@ export default function App() {
                     <Stack.Screen
                         name="Stats"
                         component={ProtectedScreen(Stats)}
+                    />
+                    <Stack.Screen
+                        name="ArchiveGroup"
+                        component={ProtectedScreen(ArchiveGroup)}
                     />
                     <Stack.Screen
                         name="Profile"

@@ -66,6 +66,20 @@ const groupSchema = new mongoose.Schema({
     type: Boolean,
     default: false,
   },
+  // Archive functionality
+  archivedBy: {
+    type: [{
+      userId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User"
+      },
+      archivedAt: {
+        type: Date,
+        default: Date.now
+      }
+    }],
+    default: []
+  },
   createdAt: {
     type: Date,
     default: Date.now,
@@ -79,11 +93,18 @@ const groupSchema = new mongoose.Schema({
 // Update the updatedAt timestamp before saving
 groupSchema.pre('save', function (next) {
   this.updatedAt = Date.now();
+
+  // Ensure archivedBy field exists
+  if (!this.archivedBy) {
+    this.archivedBy = [];
+  }
+
   next();
 });
 
 // Add indexes for better query performance
 groupSchema.index({ createdBy: 1 });
 groupSchema.index({ members: 1 });
+groupSchema.index({ "archivedBy.userId": 1 }); // Index for archive queries
 
 module.exports = mongoose.model("Group", groupSchema);

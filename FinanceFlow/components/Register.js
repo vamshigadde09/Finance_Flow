@@ -1,7 +1,7 @@
 import { Feather, MaterialIcons, Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import React, { useState } from 'react';
-import { StyleSheet, Text, TextInput, TouchableOpacity, View, Alert, StatusBar, Dimensions, ScrollView } from 'react-native';
+import { StyleSheet, Text, TextInput, TouchableOpacity, View, Alert, StatusBar, Dimensions, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import axios from 'axios';
@@ -136,174 +136,178 @@ const Register = () => {
         <SafeAreaView style={styles.container}>
             <StatusBar barStyle="light-content" backgroundColor="#8b5cf6" />
 
-
-
-            <ScrollView
-                style={styles.scrollContainer}
-                contentContainerStyle={styles.scrollContent}
-                showsVerticalScrollIndicator={false}
-                keyboardShouldPersistTaps="handled"
+            <KeyboardAvoidingView
+                style={styles.keyboardContainer}
+                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
             >
-                <View style={styles.card}>
-                    <View style={styles.welcomeSection}>
-                        <View style={styles.iconContainer}>
-                            <Ionicons name="person-add" size={32} color="#8b5cf6" />
+                <ScrollView
+                    style={styles.scrollContainer}
+                    contentContainerStyle={styles.scrollContent}
+                    showsVerticalScrollIndicator={false}
+                    keyboardShouldPersistTaps="handled"
+                >
+                    <View style={styles.card}>
+                        <View style={styles.welcomeSection}>
+                            <View style={styles.iconContainer}>
+                                <Ionicons name="person-add" size={32} color="#8b5cf6" />
+                            </View>
+                            <Text style={styles.title}>Welcome to Finance Flow</Text>
+                            <Text style={styles.subtitle}>Create your account to start managing your finances</Text>
                         </View>
-                        <Text style={styles.title}>Welcome to Finance Flow</Text>
-                        <Text style={styles.subtitle}>Create your account to start managing your finances</Text>
-                    </View>
 
-                    <View style={styles.nameRow}>
-                        <View style={[styles.inputGroup, styles.nameInputGroup]}>
-                            <Text style={styles.inputLabel}>First Name</Text>
-                            <View style={[styles.inputContainer, errors.firstName && styles.inputError]}>
-                                <Feather name="user" size={20} color="#8b5cf6" style={styles.icon} />
+                        <View style={styles.nameRow}>
+                            <View style={[styles.inputGroup, styles.nameInputGroup]}>
+                                <Text style={styles.inputLabel}>First Name</Text>
+                                <View style={[styles.inputContainer, errors.firstName && styles.inputError]}>
+                                    <Feather name="user" size={20} color="#8b5cf6" style={styles.icon} />
+                                    <TextInput
+                                        style={styles.input}
+                                        placeholder="First name"
+                                        placeholderTextColor="#9ca3af"
+                                        value={firstName}
+                                        onChangeText={(text) => {
+                                            setFirstName(text);
+                                            setErrors(prev => ({ ...prev, firstName: null }));
+                                        }}
+                                        autoCapitalize="words"
+                                    />
+                                </View>
+                                {errors.firstName && <Text style={styles.errorText}>{errors.firstName}</Text>}
+                            </View>
+
+                            <View style={[styles.inputGroup, styles.nameInputGroup]}>
+                                <Text style={styles.inputLabel}>Last Name</Text>
+                                <View style={[styles.inputContainer, errors.lastName && styles.inputError]}>
+                                    <Feather name="user" size={20} color="#8b5cf6" style={styles.icon} />
+                                    <TextInput
+                                        style={styles.input}
+                                        placeholder="Last name"
+                                        placeholderTextColor="#9ca3af"
+                                        value={lastName}
+                                        onChangeText={(text) => {
+                                            setLastName(text);
+                                            setErrors(prev => ({ ...prev, lastName: null }));
+                                        }}
+                                        autoCapitalize="words"
+                                    />
+                                </View>
+                                {errors.lastName && <Text style={styles.errorText}>{errors.lastName}</Text>}
+                            </View>
+                        </View>
+
+                        <View style={styles.inputGroup}>
+                            <Text style={styles.inputLabel}>Phone Number</Text>
+                            <View style={[styles.inputContainer, errors.phone && styles.inputError]}>
+                                <MaterialIcons name="phone" size={20} color="#8b5cf6" style={styles.icon} />
                                 <TextInput
                                     style={styles.input}
-                                    placeholder="First name"
+                                    placeholder="Enter 10-digit mobile number"
                                     placeholderTextColor="#9ca3af"
-                                    value={firstName}
-                                    onChangeText={(text) => {
-                                        setFirstName(text);
-                                        setErrors(prev => ({ ...prev, firstName: null }));
-                                    }}
-                                    autoCapitalize="words"
+                                    value={phone}
+                                    onChangeText={handlePhoneChange}
+                                    keyboardType="phone-pad"
+                                    maxLength={10}
+                                    autoCapitalize="none"
                                 />
                             </View>
-                            {errors.firstName && <Text style={styles.errorText}>{errors.firstName}</Text>}
                         </View>
+                        {errors.phone && <Text style={styles.errorText}>{errors.phone}</Text>}
 
-                        <View style={[styles.inputGroup, styles.nameInputGroup]}>
-                            <Text style={styles.inputLabel}>Last Name</Text>
-                            <View style={[styles.inputContainer, errors.lastName && styles.inputError]}>
-                                <Feather name="user" size={20} color="#8b5cf6" style={styles.icon} />
+                        <View style={styles.inputGroup}>
+                            <Text style={styles.inputLabel}>Email Address</Text>
+                            <View style={[styles.inputContainer, errors.email && styles.inputError]}>
+                                <MaterialIcons name="email" size={20} color="#8b5cf6" style={styles.icon} />
                                 <TextInput
                                     style={styles.input}
-                                    placeholder="Last name"
+                                    placeholder="Enter your email address"
                                     placeholderTextColor="#9ca3af"
-                                    value={lastName}
+                                    value={email}
                                     onChangeText={(text) => {
-                                        setLastName(text);
-                                        setErrors(prev => ({ ...prev, lastName: null }));
+                                        setEmail(text);
+                                        setErrors(prev => ({ ...prev, email: null }));
                                     }}
-                                    autoCapitalize="words"
+                                    keyboardType="email-address"
+                                    autoCapitalize="none"
                                 />
                             </View>
-                            {errors.lastName && <Text style={styles.errorText}>{errors.lastName}</Text>}
                         </View>
-                    </View>
+                        {errors.email && <Text style={styles.errorText}>{errors.email}</Text>}
 
-                    <View style={styles.inputGroup}>
-                        <Text style={styles.inputLabel}>Phone Number</Text>
-                        <View style={[styles.inputContainer, errors.phone && styles.inputError]}>
-                            <MaterialIcons name="phone" size={20} color="#8b5cf6" style={styles.icon} />
-                            <TextInput
-                                style={styles.input}
-                                placeholder="Enter 10-digit mobile number"
-                                placeholderTextColor="#9ca3af"
-                                value={phone}
-                                onChangeText={handlePhoneChange}
-                                keyboardType="phone-pad"
-                                maxLength={10}
-                                autoCapitalize="none"
-                            />
+                        <View style={styles.inputGroup}>
+                            <Text style={styles.inputLabel}>Password</Text>
+                            <View style={[styles.inputContainer, errors.password && styles.inputError]}>
+                                <Feather name="lock" size={20} color="#8b5cf6" style={styles.icon} />
+                                <TextInput
+                                    style={styles.input}
+                                    placeholder="Create a strong password"
+                                    placeholderTextColor="#9ca3af"
+                                    value={password}
+                                    onChangeText={(text) => {
+                                        setPassword(text);
+                                        setErrors(prev => ({ ...prev, password: null }));
+                                    }}
+                                    secureTextEntry={!isPasswordVisible}
+                                    autoCapitalize="none"
+                                />
+                                <TouchableOpacity onPress={() => setIsPasswordVisible(!isPasswordVisible)}>
+                                    <Feather name={isPasswordVisible ? 'eye' : 'eye-off'} size={20} color="#8b5cf6" />
+                                </TouchableOpacity>
+                            </View>
                         </View>
-                    </View>
-                    {errors.phone && <Text style={styles.errorText}>{errors.phone}</Text>}
+                        {errors.password && <Text style={styles.errorText}>{errors.password}</Text>}
 
-                    <View style={styles.inputGroup}>
-                        <Text style={styles.inputLabel}>Email Address</Text>
-                        <View style={[styles.inputContainer, errors.email && styles.inputError]}>
-                            <MaterialIcons name="email" size={20} color="#8b5cf6" style={styles.icon} />
-                            <TextInput
-                                style={styles.input}
-                                placeholder="Enter your email address"
-                                placeholderTextColor="#9ca3af"
-                                value={email}
-                                onChangeText={(text) => {
-                                    setEmail(text);
-                                    setErrors(prev => ({ ...prev, email: null }));
-                                }}
-                                keyboardType="email-address"
-                                autoCapitalize="none"
-                            />
+                        <View style={styles.inputGroup}>
+                            <Text style={styles.inputLabel}>Confirm Password</Text>
+                            <View style={[styles.inputContainer, errors.confirmPassword && styles.inputError]}>
+                                <Feather name="lock" size={20} color="#8b5cf6" style={styles.icon} />
+                                <TextInput
+                                    style={styles.input}
+                                    placeholder="Confirm your password"
+                                    placeholderTextColor="#9ca3af"
+                                    value={confirmPassword}
+                                    onChangeText={(text) => {
+                                        setConfirmPassword(text);
+                                        setErrors(prev => ({ ...prev, confirmPassword: null }));
+                                    }}
+                                    secureTextEntry={!isConfirmPasswordVisible}
+                                    autoCapitalize="none"
+                                />
+                                <TouchableOpacity onPress={() => setIsConfirmPasswordVisible(!isConfirmPasswordVisible)}>
+                                    <Feather name={isConfirmPasswordVisible ? 'eye' : 'eye-off'} size={20} color="#8b5cf6" />
+                                </TouchableOpacity>
+                            </View>
                         </View>
-                    </View>
-                    {errors.email && <Text style={styles.errorText}>{errors.email}</Text>}
+                        {errors.confirmPassword && <Text style={styles.errorText}>{errors.confirmPassword}</Text>}
 
-                    <View style={styles.inputGroup}>
-                        <Text style={styles.inputLabel}>Password</Text>
-                        <View style={[styles.inputContainer, errors.password && styles.inputError]}>
-                            <Feather name="lock" size={20} color="#8b5cf6" style={styles.icon} />
-                            <TextInput
-                                style={styles.input}
-                                placeholder="Create a strong password"
-                                placeholderTextColor="#9ca3af"
-                                value={password}
-                                onChangeText={(text) => {
-                                    setPassword(text);
-                                    setErrors(prev => ({ ...prev, password: null }));
-                                }}
-                                secureTextEntry={!isPasswordVisible}
-                                autoCapitalize="none"
-                            />
-                            <TouchableOpacity onPress={() => setIsPasswordVisible(!isPasswordVisible)}>
-                                <Feather name={isPasswordVisible ? 'eye' : 'eye-off'} size={20} color="#8b5cf6" />
-                            </TouchableOpacity>
-                        </View>
-                    </View>
-                    {errors.password && <Text style={styles.errorText}>{errors.password}</Text>}
+                        {errors.general && <Text style={styles.generalError}>{errors.general}</Text>}
 
-                    <View style={styles.inputGroup}>
-                        <Text style={styles.inputLabel}>Confirm Password</Text>
-                        <View style={[styles.inputContainer, errors.confirmPassword && styles.inputError]}>
-                            <Feather name="lock" size={20} color="#8b5cf6" style={styles.icon} />
-                            <TextInput
-                                style={styles.input}
-                                placeholder="Confirm your password"
-                                placeholderTextColor="#9ca3af"
-                                value={confirmPassword}
-                                onChangeText={(text) => {
-                                    setConfirmPassword(text);
-                                    setErrors(prev => ({ ...prev, confirmPassword: null }));
-                                }}
-                                secureTextEntry={!isConfirmPasswordVisible}
-                                autoCapitalize="none"
-                            />
-                            <TouchableOpacity onPress={() => setIsConfirmPasswordVisible(!isConfirmPasswordVisible)}>
-                                <Feather name={isConfirmPasswordVisible ? 'eye' : 'eye-off'} size={20} color="#8b5cf6" />
-                            </TouchableOpacity>
-                        </View>
-                    </View>
-                    {errors.confirmPassword && <Text style={styles.errorText}>{errors.confirmPassword}</Text>}
-
-                    {errors.general && <Text style={styles.generalError}>{errors.general}</Text>}
-
-                    <TouchableOpacity
-                        style={[styles.button, isLoading && styles.buttonDisabled]}
-                        onPress={handleRegister}
-                        disabled={isLoading}
-                        activeOpacity={0.8}
-                    >
-                        <LinearGradient
-                            colors={isLoading ? ['#9ca3af', '#6b7280'] : ['#8b5cf6', '#7c3aed']}
-                            style={styles.buttonGradient}
+                        <TouchableOpacity
+                            style={[styles.button, isLoading && styles.buttonDisabled]}
+                            onPress={handleRegister}
+                            disabled={isLoading}
+                            activeOpacity={0.8}
                         >
-                            <View style={styles.buttonContent}>
-                                {isLoading && <Ionicons name="hourglass-outline" size={20} color="#ffffff" style={styles.buttonIcon} />}
-                                <Text style={styles.buttonText}>{isLoading ? 'Creating Account...' : 'Create Account'}</Text>
-                            </View>
-                        </LinearGradient>
-                    </TouchableOpacity>
-
-                    <View style={styles.linkContainer}>
-                        <Text style={styles.linkText}>Already have an account? </Text>
-                        <TouchableOpacity onPress={() => navigation.navigate('Login')} activeOpacity={0.7}>
-                            <Text style={styles.link}>Sign In</Text>
+                            <LinearGradient
+                                colors={isLoading ? ['#9ca3af', '#6b7280'] : ['#8b5cf6', '#7c3aed']}
+                                style={styles.buttonGradient}
+                            >
+                                <View style={styles.buttonContent}>
+                                    {isLoading && <Ionicons name="hourglass-outline" size={20} color="#ffffff" style={styles.buttonIcon} />}
+                                    <Text style={styles.buttonText}>{isLoading ? 'Creating Account...' : 'Create Account'}</Text>
+                                </View>
+                            </LinearGradient>
                         </TouchableOpacity>
+
+                        <View style={styles.linkContainer}>
+                            <Text style={styles.linkText}>Already have an account? </Text>
+                            <TouchableOpacity onPress={() => navigation.navigate('Login')} activeOpacity={0.7}>
+                                <Text style={styles.link}>Sign In</Text>
+                            </TouchableOpacity>
+                        </View>
                     </View>
-                </View>
-            </ScrollView>
+                </ScrollView>
+            </KeyboardAvoidingView>
         </SafeAreaView>
     );
 };
@@ -314,6 +318,9 @@ const styles = StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: '#f8fafc',
+    },
+    keyboardContainer: {
+        flex: 1,
     },
     header: {
         paddingTop: 10,

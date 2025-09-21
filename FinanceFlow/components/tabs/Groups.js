@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TextInput, FlatList, TouchableOpacity, ActivityIndicator, RefreshControl, Animated, LayoutAnimation, Platform, UIManager, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TextInput, FlatList, TouchableOpacity, ActivityIndicator, RefreshControl, Animated, LayoutAnimation, Platform, UIManager, ScrollView, Alert, Modal, Vibration } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -106,6 +106,7 @@ const SplitGroups = () => {
     const [showCreateText, setShowCreateText] = useState(true);
     const [activeFilter, setActiveFilter] = useState('all'); // 'all', 'youOwe', 'youreOwed'
     const [groupBalances, setGroupBalances] = useState({}); // Store balances for each group
+    const [showMenu, setShowMenu] = useState(false);
     const fadeAnim = useRef(new Animated.Value(1)).current;
     const scaleAnim = useRef(new Animated.Value(1)).current;
     const rotateAnim = useRef(new Animated.Value(0)).current;
@@ -264,6 +265,66 @@ const SplitGroups = () => {
     const onRefresh = () => {
         setRefreshing(true);
         fetchGroups();
+    };
+
+    const archiveGroup = async (groupId, groupName) => {
+        try {
+            const userData = await AsyncStorage.getItem("userData");
+            if (!userData) {
+                Alert.alert("Error", "User session expired. Please login again.");
+                navigation.navigate("Login");
+                return;
+            }
+
+            const user = JSON.parse(userData);
+
+            Alert.alert(
+                "Archive Group",
+                `Are you sure you want to archive "${groupName}"? This group will be hidden from your view but other members can still see it.`,
+                [
+                    {
+                        text: "Cancel",
+                        style: "cancel"
+                    },
+                    {
+                        text: "Archive",
+                        style: "destructive",
+                        onPress: async () => {
+                            try {
+                                const response = await axios.post(
+                                    `${API_BASE_URL}/api/v1/splits/archive-group`,
+                                    { groupId },
+                                    {
+                                        headers: {
+                                            Authorization: `Bearer ${user.token}`,
+                                        },
+                                    }
+                                );
+
+                                if (response.data.success) {
+                                    Alert.alert("Success", "Group archived successfully!");
+                                    // Remove the group from local state
+                                    setGroups(prevGroups => prevGroups.filter(group => group._id !== groupId));
+                                    // Recalculate summary
+                                    calculateSummary();
+                                } else {
+                                    Alert.alert("Error", response.data.message || "Failed to archive group");
+                                }
+                            } catch (error) {
+                                console.error("Error archiving group:", error);
+                                Alert.alert(
+                                    "Error",
+                                    error.response?.data?.message || "Failed to archive group. Please try again."
+                                );
+                            }
+                        }
+                    }
+                ]
+            );
+        } catch (error) {
+            console.error("Error in archiveGroup:", error);
+            Alert.alert("Error", "An unexpected error occurred. Please try again.");
+        }
     };
 
     useEffect(() => {
@@ -428,6 +489,13 @@ const SplitGroups = () => {
                         </Text>
                     )}
                 </View>
+                <TouchableOpacity
+                    style={styles.menuButton}
+                    onPress={() => setShowMenu(true)}
+                    activeOpacity={0.7}
+                >
+                    <Ionicons name="ellipsis-vertical" size={24} color={Colors.textPrimary} onpress={() => setShowMenu(true)} />
+                </TouchableOpacity>
             </View>
 
             {/* Summary Section */}
@@ -561,6 +629,12 @@ const SplitGroups = () => {
                                     }
                                 });
                             }}
+                            onLongPress={() => {
+                                Vibration.vibrate(50); // Short vibration feedback
+                                archiveGroup(item._id, item.name);
+                            }}
+                            delayLongPress={800}
+                            activeOpacity={0.7}
                         >
                             <View style={styles.groupIconContainer}>
                                 <MaterialIcons name="groups" size={32} color={Colors.primary} />
@@ -612,6 +686,34 @@ const SplitGroups = () => {
                     </TouchableOpacity>
                 </Animated.View>
             </View>
+
+            {/* Menu Modal */}
+            <Modal
+                visible={showMenu}
+                transparent={true}
+                animationType="fade"
+                onRequestClose={() => setShowMenu(false)}
+            >
+                <TouchableOpacity
+                    style={styles.modalOverlay}
+                    activeOpacity={1}
+                    onPress={() => setShowMenu(false)}
+                >
+                    <View style={styles.menuContainer}>
+                        <TouchableOpacity
+                            style={styles.menuItem}
+                            onPress={() => {
+                                setShowMenu(false); // Close the modal first
+                                navigation.navigate('ArchiveGroup');
+                            }}
+                            activeOpacity={0.7}
+                        >
+                            <Ionicons name="archive-outline" size={24} color={Colors.textPrimary} />
+                            <Text style={styles.menuItemText}>Archive Groups</Text>
+                        </TouchableOpacity>
+                    </View>
+                </TouchableOpacity>
+            </Modal>
         </SafeAreaView>
     );
 };
@@ -623,6 +725,9 @@ const styles = StyleSheet.create({
         paddingTop: '10%',
     },
     header: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
         paddingHorizontal: 20,
         paddingVertical: 16,
         backgroundColor: Colors.backgroundSecondary,
@@ -634,6 +739,13 @@ const styles = StyleSheet.create({
     },
     headerContent: {
         flexDirection: 'column',
+        flex: 1,
+    },
+    menuButton: {
+        padding: 8,
+        borderRadius: 20,
+        backgroundColor: 'rgba(139, 92, 246, 0.1)',
+        marginLeft: 12,
     },
     headerTitle: {
         fontSize: 20,
@@ -958,6 +1070,50 @@ const styles = StyleSheet.create({
         textAlign: 'center',
         lineHeight: 20,
         fontWeight: '500',
+    },
+    // Modal styles
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        justifyContent: 'flex-end',
+    },
+    menuContainer: {
+        backgroundColor: Colors.backgroundSecondary,
+        borderTopLeftRadius: 20,
+        borderTopRightRadius: 20,
+        paddingTop: 20,
+        paddingBottom: 40,
+        paddingHorizontal: 20,
+        shadowColor: Colors.shadow,
+        shadowOffset: { width: 0, height: -2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 8,
+        elevation: 8,
+    },
+    menuItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: 16,
+        paddingHorizontal: 20,
+        borderRadius: 12,
+        backgroundColor: 'rgba(139, 92, 246, 0.05)',
+        marginBottom: 8,
+    },
+    menuItemText: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: Colors.textPrimary,
+        marginLeft: 16,
+        letterSpacing: 0.3,
+    },
+    // Group actions styles
+    groupActions: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+    },
+    archiveHint: {
+        opacity: 0.6,
     },
 });
 

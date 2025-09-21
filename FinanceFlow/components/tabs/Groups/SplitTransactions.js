@@ -46,7 +46,7 @@ const categories = [
 const SplitTransactions = () => {
     const route = useRoute();
     const navigation = useNavigation();
-    const { selectedMembers = [], groupName, groupId, template } = route.params || {};
+    const { selectedMembers = [], groupName, groupId, template, transactionToEdit, isEditMode } = route.params || {};
 
     // Initialize state with template data if available
     const [title, setTitle] = useState('');
@@ -120,6 +120,43 @@ const SplitTransactions = () => {
         }
     }, [template]);
 
+    // Initialize state with transaction data if in edit mode
+    useEffect(() => {
+        if (isEditMode && transactionToEdit) {
+            // Update individual state variables with transaction data
+            setTitle(transactionToEdit.title || '');
+            setAmount(transactionToEdit.amount?.toString() || '');
+            setCategory(transactionToEdit.category || '');
+            setDescription(transactionToEdit.description || '');
+            setNotes(transactionToEdit.notes || '');
+            setTags(transactionToEdit.tags?.join(', ') || '');
+            setSplitType(transactionToEdit.splitType || 'even');
+
+            // Set custom amounts if split type is custom
+            if (transactionToEdit.splitType === 'custom' && transactionToEdit.customAmounts) {
+                setCustomAmounts(transactionToEdit.customAmounts.map(amount => amount.toString()));
+            }
+
+            // Set share counts if split type is share
+            if (transactionToEdit.splitType === 'share' && transactionToEdit.shareCounts) {
+                setShareCounts(transactionToEdit.shareCounts.map(count => count.toString()));
+            }
+
+            // Update form data
+            setFormData({
+                title: transactionToEdit.title || '',
+                amount: transactionToEdit.amount?.toString() || '',
+                category: transactionToEdit.category || '',
+                description: transactionToEdit.description || '',
+                notes: transactionToEdit.notes || '',
+                tags: transactionToEdit.tags?.join(', ') || '',
+                receiptNumber: '',
+                splitType: transactionToEdit.splitType || 'even',
+                customAmounts: transactionToEdit.customAmounts || []
+            });
+        }
+    }, [isEditMode, transactionToEdit]);
+
     // Initialize members when component mounts
     useEffect(() => {
         if (selectedMembers.length > 0) {
@@ -151,24 +188,33 @@ const SplitTransactions = () => {
         }
     }, [selectedMembers, template, route.params?.groupData?.members]);
 
-    // Load saved form data only if no template is provided
+    // Load saved form data only if no template and not in edit mode
     useEffect(() => {
-        if (!template) {
+        if (!template && !isEditMode) {
             loadSavedFormData();
         }
-    }, [template]);
+    }, [template, isEditMode]);
 
-    // Save form data whenever it changes, but only if no template is provided
+    // Save form data whenever it changes, but only if no template and not in edit mode
     useEffect(() => {
-        if (!template) {
+        if (!template && !isEditMode) {
             saveFormData();
         }
-    }, [formData, template]);
+    }, [formData, template, isEditMode]);
 
     // Fetch bank accounts when component mounts
     useEffect(() => {
         fetchBankAccounts();
     }, []);
+
+    // Clear saved form data when component unmounts in edit mode
+    useEffect(() => {
+        return () => {
+            if (isEditMode) {
+                clearFormData();
+            }
+        };
+    }, [isEditMode]);
 
     const fetchBankAccounts = async (retryCount = 0) => {
         try {
@@ -509,17 +555,34 @@ const SplitTransactions = () => {
                                 : []
                 };
 
-                const response = await axios.post(
-                    `${API_BASE_URL}/api/v1/splits/create-transaction`,
-                    transactionData,
-                    {
-                        headers: {
-                            'Authorization': `Bearer ${token}`,
-                            'Content-Type': 'application/json'
-                        },
-                        timeout: 15000
-                    }
-                );
+                let response;
+                if (isEditMode && transactionToEdit) {
+                    // Update existing transaction
+                    response = await axios.put(
+                        `${API_BASE_URL}/api/v1/splits/update-transaction/${transactionToEdit._id}`,
+                        transactionData,
+                        {
+                            headers: {
+                                'Authorization': `Bearer ${token}`,
+                                'Content-Type': 'application/json'
+                            },
+                            timeout: 15000
+                        }
+                    );
+                } else {
+                    // Create new transaction
+                    response = await axios.post(
+                        `${API_BASE_URL}/api/v1/splits/create-transaction`,
+                        transactionData,
+                        {
+                            headers: {
+                                'Authorization': `Bearer ${token}`,
+                                'Content-Type': 'application/json'
+                            },
+                            timeout: 15000
+                        }
+                    );
+                }
 
                 if (response.data.success) {
                     setPaymentStatus("success");
@@ -528,25 +591,25 @@ const SplitTransactions = () => {
                     // Transition from processing to success
                     setResultType('success');
                     setResultData({
-                        title: 'Transaction Successful!',
-                        subtitle: 'Your split transaction has been completed successfully',
+                        title: isEditMode ? 'Transaction Updated!' : 'Transaction Successful!',
+                        subtitle: isEditMode ? 'Your split transaction has been updated successfully' : 'Your split transaction has been completed successfully',
                         amount: parseFloat(amount),
-                        transactionId: response.data.data?._id || 'TXN' + Date.now(),
+                        transactionId: response.data.data?._id || transactionToEdit?._id || 'TXN' + Date.now(),
                         category: category,
                         bankAccount: selectedBankAccount?.bankName,
                         groupName: groupName,
                     });
                 } else {
-                    throw new Error(response.data.message || 'Failed to save transaction');
+                    throw new Error(response.data.message || (isEditMode ? 'Failed to update transaction' : 'Failed to save transaction'));
                 }
             } catch (error) {
-                console.error("Error in transaction creation:", error);
+                console.error(`Error in transaction ${isEditMode ? 'update' : 'creation'}:`, error);
                 console.error("Error details:", {
                     message: error.message,
                     response: error.response?.data,
                     status: error.response?.status
                 });
-                let errorMessage = "Failed to save transaction. Please try again.";
+                let errorMessage = isEditMode ? "Failed to update transaction. Please try again." : "Failed to save transaction. Please try again.";
 
                 if (error.response) {
                     console.error("Error response data:", error.response.data);
@@ -689,7 +752,9 @@ const SplitTransactions = () => {
                             <Ionicons name="people" size={20} color="#8b5cf6" />
                         </View>
                         <View style={styles.headerTextContainer}>
-                            <Text style={styles.headerTitle}>{groupName || 'New Transaction'}</Text>
+                            <Text style={styles.headerTitle}>
+                                {isEditMode ? 'Edit Transaction' : (groupName || 'New Transaction')}
+                            </Text>
                             <Text style={styles.headerSubtitle}>{selectedMembers.length} members</Text>
                         </View>
                     </View>
@@ -1094,10 +1159,10 @@ const SplitTransactions = () => {
                 >
                     <Text style={styles.saveBtnText}>
                         {paymentStatus === "success"
-                            ? "Payment Successful ✓"
+                            ? (isEditMode ? "Transaction Updated ✓" : "Payment Successful ✓")
                             : paymentStatus === "failed"
-                                ? "Payment Failed ✗"
-                                : "Complete Transaction"}
+                                ? (isEditMode ? "Update Failed ✗" : "Payment Failed ✗")
+                                : (isEditMode ? "Update Transaction" : "Complete Transaction")}
                     </Text>
                 </TouchableOpacity>
                 {/* Bank Account Selection Modal */}

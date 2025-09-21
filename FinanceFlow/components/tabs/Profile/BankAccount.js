@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigation } from '@react-navigation/native';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, TextInput, Modal, Switch, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, TextInput, Modal, Switch, Dimensions, KeyboardAvoidingView, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Linking } from 'react-native';
@@ -25,6 +25,7 @@ const BankAccount = () => {
     const [optionsVisible, setOptionsVisible] = useState(false);
     const [confirmPrimaryVisible, setConfirmPrimaryVisible] = useState(false);
     const [pendingPrimaryId, setPendingPrimaryId] = useState(null);
+    const [isEditMode, setIsEditMode] = useState(false);
 
     // Dashboard calculations
     const totalBalance = accounts.reduce((sum, acc) => sum + parseFloat(acc.currentBalance || 0), 0);
@@ -242,6 +243,8 @@ const BankAccount = () => {
                 setPersonalLimitAmount('');
                 setIsPrimary(false);
                 setShowInDashboard(true);
+                setIsEditMode(false);
+                setSelectedAccount(null);
             } else {
                 Alert.alert('Error', responseData.message || 'Failed to add account');
             }
@@ -301,34 +304,57 @@ const BankAccount = () => {
 
     const handleUpdateAccount = async () => {
         if (!selectedAccount) return;
+
+        // Validate form fields
+        if (!bankName || !currentBalance || !limitAmount || !personalLimitAmount) {
+            Alert.alert('Error', 'Please fill all required fields');
+            return;
+        }
+
         try {
+            console.log('Selected account for update:', selectedAccount);
+            console.log('Form data:', { bankName, accountType, currentBalance, limitAmount, personalLimitAmount, isPrimary });
+
             const token = await AsyncStorage.getItem('token');
             if (!token) {
                 Alert.alert('Error', 'Please login to update account');
                 return;
             }
-            const response = await fetch(`${API_BASE_URL}/api/v1/bankaccounts/update-bank-account/${selectedAccount.id}`, {
+            const accountId = selectedAccount._id || selectedAccount.id;
+            console.log('Account ID for update:', accountId);
+            if (!accountId) {
+                Alert.alert('Error', 'Account ID not found');
+                return;
+            }
+
+            const response = await fetch(`${API_BASE_URL}/api/v1/bankaccounts/update-bank-account/${accountId}`, {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${token}`
                 },
                 body: JSON.stringify({
-                    bankName: selectedAccount.bankName,
-                    accountType: selectedAccount.accountType,
-                    currentBalance: selectedAccount.currentBalance,
-                    limitAmount: selectedAccount.limitAmount,
-                    personalLimitAmount: selectedAccount.personalLimitAmount,
-                    isPrimary: selectedAccount.isPrimary
+                    bankName: bankName,
+                    accountType: accountType,
+                    currentBalance: parseFloat(currentBalance),
+                    limitAmount: parseFloat(limitAmount),
+                    personalLimitAmount: parseFloat(personalLimitAmount),
+                    isPrimary: isPrimary,
+                    showInDashboard: showInDashboard
                 })
             });
+
+            const responseData = await response.json();
+            console.log('Update response:', responseData);
+
             if (response.ok) {
+                setModalVisible(false);
                 setEditModalVisible(false);
                 setSelectedAccount(null);
+                setIsEditMode(false);
                 await fetchAccounts();
             } else {
-                const errorData = await response.json();
-                Alert.alert('Error', errorData.message || 'Failed to update account');
+                Alert.alert('Error', responseData.message || 'Failed to update account');
             }
         } catch (error) {
             console.error('Error updating account:', error);
@@ -522,15 +548,23 @@ const BankAccount = () => {
                 transparent={true}
                 onRequestClose={() => setModalVisible(false)}
             >
-                <View style={styles.modalOverlay}>
+                <KeyboardAvoidingView
+                    style={styles.modalOverlay}
+                    behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                    keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+                >
                     <View style={styles.formModal}>
                         <View style={styles.modalHeader}>
                             <View style={styles.modalTitleContainer}>
-                                <Ionicons name="add-circle" size={24} color="#8b5cf6" />
-                                <Text style={styles.modalTitle}>Add Bank Account</Text>
+                                <Ionicons name={isEditMode ? "create" : "add-circle"} size={24} color="#8b5cf6" />
+                                <Text style={styles.modalTitle}>{isEditMode ? "Update Bank Account" : "Add Bank Account"}</Text>
                             </View>
                             <TouchableOpacity
-                                onPress={() => setModalVisible(false)}
+                                onPress={() => {
+                                    setModalVisible(false);
+                                    setIsEditMode(false);
+                                    setSelectedAccount(null);
+                                }}
                                 style={styles.closeButton}
                             >
                                 <Ionicons name="close" size={24} color="#64748b" />
@@ -637,26 +671,30 @@ const BankAccount = () => {
                         <View style={styles.buttonContainer}>
                             <TouchableOpacity
                                 style={styles.addButton}
-                                onPress={handleAddAccount}
+                                onPress={isEditMode ? handleUpdateAccount : handleAddAccount}
                             >
                                 <LinearGradient
                                     colors={['#8b5cf6', '#7c3aed']}
                                     style={styles.addButtonGradient}
                                 >
-                                    <Ionicons name="add" size={20} color="#fff" />
-                                    <Text style={styles.addButtonText}>Add Account</Text>
+                                    <Ionicons name={isEditMode ? "checkmark" : "add"} size={20} color="#fff" />
+                                    <Text style={styles.addButtonText}>{isEditMode ? "Update Account" : "Add Account"}</Text>
                                 </LinearGradient>
                             </TouchableOpacity>
 
                             <TouchableOpacity
-                                onPress={() => setModalVisible(false)}
+                                onPress={() => {
+                                    setModalVisible(false);
+                                    setIsEditMode(false);
+                                    setSelectedAccount(null);
+                                }}
                                 style={styles.cancelButton}
                             >
                                 <Text style={styles.cancelButtonText}>Cancel</Text>
                             </TouchableOpacity>
                         </View>
                     </View>
-                </View>
+                </KeyboardAvoidingView>
             </Modal>
 
             {/* Options Bottom Sheet */}
@@ -680,6 +718,7 @@ const BankAccount = () => {
                                 setLimitAmount(String(selectedAccount.limitAmount));
                                 setPersonalLimitAmount(String(selectedAccount.personalLimitAmount));
                                 setIsPrimary(selectedAccount.isPrimary);
+                                setIsEditMode(true);
                                 setOptionsVisible(false);
                                 setModalVisible(true);
                             }}

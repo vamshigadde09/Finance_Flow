@@ -96,7 +96,7 @@ const createGroup = async (req, res) => {
         }
 
         // 7. Create the group
-        const newGroup = await Group.create({
+        const groupData = {
             name,
             members: memberObjects,
             createdBy: {
@@ -104,8 +104,11 @@ const createGroup = async (req, res) => {
                 name: `${creator.firstName} ${creator.lastName}`,
                 phoneNumber: creator.phoneNumber,
                 avatar: creator.avatar || `https://ui-avatars.com/api/?name=${creator.firstName}+${creator.lastName}&background=random&format=png`
-            }
-        });
+            },
+            archivedBy: []
+        };
+
+        const newGroup = await Group.create(groupData);
 
         // 8. Update user documents
         await User.updateMany(
@@ -116,7 +119,10 @@ const createGroup = async (req, res) => {
         // 9. Return success response
         res.status(201).json({
             success: true,
-            group: newGroup
+            group: {
+                ...newGroup.toObject(),
+                archivedBy: newGroup.archivedBy || []
+            }
         });
     } catch (error) {
         res.status(500).json({
@@ -142,12 +148,20 @@ const getUserGroups = async (req, res) => {
         }
 
         const objectId = new mongoose.Types.ObjectId(userId);
-        // Find groups where user is either creator or member
+        // Find groups where user is either creator or member, but exclude archived groups
         const groups = await Group.find({
             $or: [
                 { createdBy: objectId },
                 { members: objectId }
-            ]
+            ],
+            // Exclude groups that are archived by this user
+            archivedBy: {
+                $not: {
+                    $elemMatch: {
+                        userId: objectId
+                    }
+                }
+            }
         })
             .populate({
                 path: "members",
@@ -607,6 +621,132 @@ const getGroupTransactions = async (req, res) => {
         });
     }
 };
+
+//update group transaction
+const updateGroupTransaction = async (req, res) => {
+    try {
+        const { transactionId } = req.params;
+        const userId = req.user._id;
+        const {
+            title,
+            description,
+            amount,
+            category,
+            paidBy,
+            splitBetween,
+            group,
+            splitType,
+            customAmounts,
+            notes,
+            tags,
+            bankAccountId
+        } = req.body;
+
+        // Validate required fields
+        const missingFields = [];
+        if (!title) missingFields.push('title');
+        if (!amount) missingFields.push('amount');
+        if (!paidBy) missingFields.push('paidBy');
+        if (!group) missingFields.push('group');
+        if (!splitBetween) missingFields.push('splitBetween');
+        if (!bankAccountId) missingFields.push('bankAccountId');
+
+        if (missingFields.length > 0) {
+            return res.status(400).json({
+                success: false,
+                message: "Missing required fields",
+                missingFields: missingFields
+            });
+        }
+
+        // Find the transaction
+        const transaction = await Transaction.findById(transactionId);
+        if (!transaction) {
+            return res.status(404).json({
+                success: false,
+                message: "Transaction not found"
+            });
+        }
+
+        // Check if the user is the creator of the transaction
+        if (transaction.paidBy.toString() !== userId.toString()) {
+            return res.status(403).json({
+                success: false,
+                message: "You can only update transactions you created"
+            });
+        }
+
+        // Check if any settlements are paid or success
+        const hasPaidSettlements = transaction.settlements && transaction.settlements.some(
+            settlement => settlement.status === 'paid' || settlement.status === 'success'
+        );
+
+        if (hasPaidSettlements) {
+            return res.status(403).json({
+                success: false,
+                message: "Cannot update transaction with paid settlements"
+            });
+        }
+
+        // Get the old bank account and add back the old amount
+        const oldBankAccount = await BankBalance.findById(transaction.bankAccount);
+        if (oldBankAccount) {
+            const newBalance = oldBankAccount.currentBalance + transaction.amount;
+            await BankBalance.findByIdAndUpdate(
+                transaction.bankAccount,
+                { currentBalance: newBalance },
+                { new: true }
+            );
+        }
+
+        // Get the new bank account and subtract the new amount
+        const newBankAccount = await BankBalance.findById(bankAccountId);
+        if (newBankAccount) {
+            const newBalance = newBankAccount.currentBalance - amount;
+            await BankBalance.findByIdAndUpdate(
+                bankAccountId,
+                { currentBalance: newBalance },
+                { new: true }
+            );
+        }
+
+        // Update the transaction
+        const updatedTransaction = await Transaction.findByIdAndUpdate(
+            transactionId,
+            {
+                title,
+                description,
+                amount,
+                category,
+                paidBy,
+                splitBetween,
+                group,
+                splitType,
+                customAmounts,
+                notes,
+                tags,
+                bankAccount: bankAccountId,
+                updatedAt: new Date()
+            },
+            { new: true }
+        );
+
+        res.status(200).json({
+            success: true,
+            message: "Transaction updated successfully",
+            data: updatedTransaction
+        });
+
+    } catch (error) {
+        console.error("Error updating transaction:", error);
+        res.status(500).json({
+            success: false,
+            message: "Internal server error",
+            error: process.env.NODE_ENV === "development" ? error.message : undefined
+        });
+    }
+};
+
 //delete group transaction
 const deleteGroupTransaction = async (req, res) => {
     try {
@@ -627,6 +767,18 @@ const deleteGroupTransaction = async (req, res) => {
             return res.status(403).json({
                 success: false,
                 message: "You can only delete transactions you created"
+            });
+        }
+
+        // Check if any settlements are paid or success
+        const hasPaidSettlements = transaction.settlements && transaction.settlements.some(
+            settlement => settlement.status === 'paid' || settlement.status === 'success'
+        );
+
+        if (hasPaidSettlements) {
+            return res.status(403).json({
+                success: false,
+                message: "Cannot delete transaction with paid settlements"
             });
         }
 
@@ -874,8 +1026,40 @@ const getGroupDetails = async (req, res) => {
         }
 
         const group = await Group.findById(groupId)
-            .populate('members', 'firstName lastName avatar phoneNumber')
-            .populate('createdBy', 'firstName lastName avatar phoneNumber');
+            .populate({
+                path: 'members',
+                select: 'firstName lastName avatar phoneNumber'
+            })
+            .populate({
+                path: 'createdBy',
+                select: 'firstName lastName avatar phoneNumber'
+            });
+
+        console.log("=== BACKEND GROUP DETAILS DEBUG ===");
+        console.log("Group ID:", groupId);
+        console.log("Group found:", !!group);
+        console.log("Group members before processing:", group?.members);
+        console.log("Group createdBy before processing:", group?.createdBy);
+
+        // Create response object with computed name fields
+        const responseGroup = {
+            ...group.toObject(),
+            members: group.members.map(member => {
+                const memberObj = member.toObject ? member.toObject() : member;
+                return {
+                    ...memberObj,
+                    name: `${memberObj.firstName} ${memberObj.lastName}`.trim()
+                };
+            }),
+            createdBy: {
+                ...group.createdBy.toObject(),
+                name: `${group.createdBy.firstName} ${group.createdBy.lastName}`.trim()
+            }
+        };
+
+        console.log("=== BACKEND AFTER PROCESSING ===");
+        console.log("Response group members:", responseGroup.members);
+        console.log("Response group createdBy:", responseGroup.createdBy);
 
         if (!group) {
             return res.status(404).json({
@@ -894,7 +1078,7 @@ const getGroupDetails = async (req, res) => {
 
         // Format the response to include isSettleUpMode and count
         const formattedGroup = {
-            ...group.toObject(),
+            ...responseGroup,
             isSettleUpMode: group.isSettleUpMode.map(mode => ({
                 memberId: mode.memberId,
                 isSettled: mode.isSettled,
@@ -1718,11 +1902,509 @@ const handleRejectedSettlements = async (req, res) => {
     }
 };
 
+// Archive group for a specific user
+const archiveGroup = async (req, res) => {
+    try {
+        const { groupId } = req.body;
+        const userId = req.user.id; // From auth middleware
+
+        // Validate input
+        if (!groupId) {
+            return res.status(400).json({
+                success: false,
+                message: "Group ID is required"
+            });
+        }
+
+        if (!mongoose.Types.ObjectId.isValid(groupId)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid group ID format"
+            });
+        }
+
+        // Find the group
+        const group = await Group.findById(groupId);
+        if (!group) {
+            return res.status(404).json({
+                success: false,
+                message: "Group not found"
+            });
+        }
+
+        // Check if user is a member of the group
+        const isMember = group.members.some(member => member.toString() === userId) ||
+            group.createdBy.toString() === userId;
+
+        if (!isMember) {
+            return res.status(403).json({
+                success: false,
+                message: "You are not a member of this group"
+            });
+        }
+
+        // Check if group is already archived by this user
+        const alreadyArchived = group.archivedBy.some(archive =>
+            archive.userId.toString() === userId
+        );
+
+        if (alreadyArchived) {
+            return res.status(400).json({
+                success: false,
+                message: "Group is already archived by you"
+            });
+        }
+
+        // Add user to archivedBy array
+        group.archivedBy.push({
+            userId: userId,
+            archivedAt: new Date()
+        });
+
+        await group.save();
+
+        res.status(200).json({
+            success: true,
+            message: "Group archived successfully"
+        });
+
+    } catch (error) {
+        console.error("Error archiving group:", error);
+        res.status(500).json({
+            success: false,
+            message: "Failed to archive group",
+            error: error.message
+        });
+    }
+};
+
+// Restore group for a specific user
+const restoreGroup = async (req, res) => {
+    try {
+        const { groupId } = req.body;
+        const userId = req.user.id; // From auth middleware
+
+        // Validate input
+        if (!groupId) {
+            return res.status(400).json({
+                success: false,
+                message: "Group ID is required"
+            });
+        }
+
+        if (!mongoose.Types.ObjectId.isValid(groupId)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid group ID format"
+            });
+        }
+
+        // Find the group
+        const group = await Group.findById(groupId);
+        if (!group) {
+            return res.status(404).json({
+                success: false,
+                message: "Group not found"
+            });
+        }
+
+        // Check if user is a member of the group
+        const isMember = group.members.some(member => member.toString() === userId) ||
+            group.createdBy.toString() === userId;
+
+        if (!isMember) {
+            return res.status(403).json({
+                success: false,
+                message: "You are not a member of this group"
+            });
+        }
+
+        // Check if group is archived by this user
+        const archiveIndex = group.archivedBy.findIndex(archive =>
+            archive.userId.toString() === userId
+        );
+
+        if (archiveIndex === -1) {
+            return res.status(400).json({
+                success: false,
+                message: "Group is not archived by you"
+            });
+        }
+
+        // Remove user from archivedBy array
+        group.archivedBy.splice(archiveIndex, 1);
+        await group.save();
+
+        res.status(200).json({
+            success: true,
+            message: "Group restored successfully"
+        });
+
+    } catch (error) {
+        console.error("Error restoring group:", error);
+        res.status(500).json({
+            success: false,
+            message: "Failed to restore group",
+            error: error.message
+        });
+    }
+};
+
+// Get archived groups for a specific user
+const getArchivedGroups = async (req, res) => {
+    try {
+        const userId = req.user.id; // From auth middleware
+
+        // Find groups where user is archived
+        const groups = await Group.find({
+            $or: [
+                { createdBy: userId },
+                { members: userId }
+            ],
+            archivedBy: {
+                $elemMatch: {
+                    userId: userId
+                }
+            }
+        })
+            .populate({
+                path: "members",
+                select: "firstName lastName avatar phoneNumber"
+            })
+            .populate({
+                path: "createdBy",
+                select: "firstName lastName avatar phoneNumber"
+            })
+            .lean();
+
+        if (!groups || groups.length === 0) {
+            return res.status(200).json({
+                success: true,
+                archivedGroups: [],
+                message: "No archived groups found for this user."
+            });
+        }
+
+        // Format the groups with member count and archive date
+        const formattedGroups = groups.map(group => {
+            const userArchive = group.archivedBy.find(archive =>
+                archive.userId.toString() === userId
+            );
+
+            return {
+                _id: group._id,
+                name: group.name,
+                memberCount: group.members.length,
+                members: group.members,
+                createdBy: group.createdBy,
+                archivedAt: userArchive.archivedAt,
+                createdAt: group.createdAt,
+                updatedAt: group.updatedAt
+            };
+        });
+
+        res.status(200).json({
+            success: true,
+            archivedGroups: formattedGroups
+        });
+
+    } catch (error) {
+        console.error("Error fetching archived groups:", error);
+        res.status(500).json({
+            success: false,
+            message: "Failed to fetch archived groups",
+            error: error.message
+        });
+    }
+};
+
+// Helper function to migrate existing groups (can be called manually)
+const migrateExistingGroups = async () => {
+    try {
+        console.log("Starting migration of existing groups...");
+
+        // Find all groups that don't have the archivedBy field
+        const groupsWithoutArchive = await Group.find({
+            archivedBy: { $exists: false }
+        });
+
+        console.log(`Found ${groupsWithoutArchive.length} groups without archivedBy field`);
+
+        if (groupsWithoutArchive.length === 0) {
+            console.log("All groups already have archivedBy field");
+            return { success: true, migratedCount: 0 };
+        }
+
+        // Update all groups to include archivedBy field
+        const updateResult = await Group.updateMany(
+            { archivedBy: { $exists: false } },
+            { $set: { archivedBy: [] } }
+        );
+
+        console.log(`Successfully migrated ${updateResult.modifiedCount} groups`);
+        return { success: true, migratedCount: updateResult.modifiedCount };
+
+    } catch (error) {
+        console.error("Error migrating groups for archive:", error);
+        return { success: false, error: error.message };
+    }
+};
+
+// Delete group (only for creator)
+const deleteGroup = async (req, res) => {
+    try {
+        const { groupId } = req.params;
+        const userId = req.user.id; // From auth middleware
+
+        // Validate input
+        if (!groupId) {
+            return res.status(400).json({
+                success: false,
+                message: "Group ID is required"
+            });
+        }
+
+        if (!mongoose.Types.ObjectId.isValid(groupId)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid group ID format"
+            });
+        }
+
+        // Find the group
+        const group = await Group.findById(groupId);
+        if (!group) {
+            return res.status(404).json({
+                success: false,
+                message: "Group not found"
+            });
+        }
+
+        // Check if user is the creator
+        if (String(group.createdBy) !== String(userId)) {
+            return res.status(403).json({
+                success: false,
+                message: "Only the group creator can delete the group"
+            });
+        }
+
+        // Delete all transactions related to this group
+        await Transaction.deleteMany({ group: groupId });
+
+        // Remove group from all users' groups array
+        await User.updateMany(
+            { groups: groupId },
+            { $pull: { groups: groupId } }
+        );
+
+        // Delete the group
+        await Group.findByIdAndDelete(groupId);
+
+        res.status(200).json({
+            success: true,
+            message: "Group deleted successfully"
+        });
+
+    } catch (error) {
+        console.error("Error deleting group:", error);
+        res.status(500).json({
+            success: false,
+            message: "Failed to delete group",
+            error: error.message
+        });
+    }
+};
+
+// Leave group (for non-creators)
+const leaveGroup = async (req, res) => {
+    try {
+        const { groupId } = req.body;
+        const userId = req.user.id; // From auth middleware
+
+        // Validate input
+        if (!groupId) {
+            return res.status(400).json({
+                success: false,
+                message: "Group ID is required"
+            });
+        }
+
+        if (!mongoose.Types.ObjectId.isValid(groupId)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid group ID format"
+            });
+        }
+
+        // Find the group
+        const group = await Group.findById(groupId);
+        if (!group) {
+            return res.status(404).json({
+                success: false,
+                message: "Group not found"
+            });
+        }
+
+        // Check if user is the creator
+        if (String(group.createdBy) === String(userId)) {
+            return res.status(403).json({
+                success: false,
+                message: "Group creator cannot leave the group. Please delete the group instead."
+            });
+        }
+
+        // Check if user is a member
+        const isMember = group.members.some(member => String(member) === String(userId));
+        if (!isMember) {
+            return res.status(400).json({
+                success: false,
+                message: "You are not a member of this group"
+            });
+        }
+
+        // Remove user from group members
+        group.members = group.members.filter(member => String(member) !== String(userId));
+        await group.save();
+
+        // Remove group from user's groups array
+        await User.findByIdAndUpdate(userId, {
+            $pull: { groups: groupId }
+        });
+
+        // Handle any pending transactions where user is involved
+        // You might want to add logic here to handle pending settlements
+        // For now, we'll just remove the user from future transactions
+
+        res.status(200).json({
+            success: true,
+            message: "You have successfully left the group"
+        });
+
+    } catch (error) {
+        console.error("Error leaving group:", error);
+        res.status(500).json({
+            success: false,
+            message: "Failed to leave group",
+            error: error.message
+        });
+    }
+};
+
+// Add members to existing group
+const addMembers = async (req, res) => {
+    try {
+        const { groupId, newMembers } = req.body;
+        const userId = req.user.id; // From auth middleware
+
+        // Validate input
+        if (!groupId) {
+            return res.status(400).json({
+                success: false,
+                message: "Group ID is required"
+            });
+        }
+
+        if (!newMembers || !Array.isArray(newMembers) || newMembers.length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: "New members array is required and cannot be empty"
+            });
+        }
+
+        if (!mongoose.Types.ObjectId.isValid(groupId)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid group ID format"
+            });
+        }
+
+        // Find the group
+        const group = await Group.findById(groupId);
+        if (!group) {
+            return res.status(404).json({
+                success: false,
+                message: "Group not found"
+            });
+        }
+
+        // Check if user is a member of the group
+        const isMember = group.members.some(member => String(member) === String(userId));
+        if (!isMember) {
+            return res.status(403).json({
+                success: false,
+                message: "You must be a member of the group to add new members"
+            });
+        }
+
+        // Process new members
+        const membersToAdd = [];
+        const usersToUpdate = [];
+
+        for (const newMember of newMembers) {
+            if (!newMember.phoneNumber) {
+                continue; // Skip members without phone numbers
+            }
+
+            // Find user by phone number
+            const user = await User.findOne({
+                phoneNumber: newMember.phoneNumber
+            });
+
+            if (user) {
+                // Check if user is already a member
+                const isAlreadyMember = group.members.some(member => String(member) === String(user._id));
+                if (!isAlreadyMember) {
+                    membersToAdd.push(user._id);
+                    usersToUpdate.push(user._id);
+                }
+            }
+        }
+
+        if (membersToAdd.length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: "No new members to add. All selected contacts are either already members or not registered in the app."
+            });
+        }
+
+        // Add new members to the group
+        group.members = [...group.members, ...membersToAdd];
+        await group.save();
+
+        // Add group to new users' groups array
+        await User.updateMany(
+            { _id: { $in: usersToUpdate } },
+            { $addToSet: { groups: groupId } }
+        );
+
+        // Get updated group with populated members
+        const updatedGroup = await Group.findById(groupId)
+            .populate('members', 'name phoneNumber avatar')
+            .populate('createdBy', 'name phoneNumber avatar');
+
+        res.status(200).json({
+            success: true,
+            message: `${membersToAdd.length} member(s) added successfully`,
+            group: updatedGroup,
+            addedCount: membersToAdd.length
+        });
+
+    } catch (error) {
+        console.error("Error adding members:", error);
+        res.status(500).json({
+            success: false,
+            message: "Failed to add members",
+            error: error.message
+        });
+    }
+};
+
 module.exports = {
     createGroup,
     getUserGroups,
     createGroupTransaction,
     getGroupTransactions,
+    updateGroupTransaction,
     deleteGroupTransaction,
     getGroupBalances,
     updateSettleUpMode,
@@ -1732,5 +2414,12 @@ module.exports = {
     confirmSettlement,
     handleRejectedSettlements,
     getGroupSpendingSummary,
-    getTotalBalances
+    getTotalBalances,
+    archiveGroup,
+    restoreGroup,
+    getArchivedGroups,
+    migrateExistingGroups,
+    deleteGroup,
+    leaveGroup,
+    addMembers
 }

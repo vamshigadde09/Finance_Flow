@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, FlatList, ActivityIndicator, TouchableOpacity, TextInput, ScrollView, Image, Modal, Animated } from 'react-native';
+import { View, Text, StyleSheet, FlatList, ActivityIndicator, TouchableOpacity, TextInput, ScrollView, Image, Modal, Animated, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
@@ -33,6 +33,8 @@ const AllViewTrans = () => {
     const [selectedTransaction, setSelectedTransaction] = useState(null);
     const [modalVisible, setModalVisible] = useState(false);
     const [showFullDetails, setShowFullDetails] = useState(false);
+    const [deleteModalVisible, setDeleteModalVisible] = useState(false);
+    const [transactionToDelete, setTransactionToDelete] = useState(null);
 
     // Pagination state
     const [currentPage, setCurrentPage] = useState(1);
@@ -389,6 +391,83 @@ const AllViewTrans = () => {
         setModalVisible(true);
     };
 
+    const handleDeleteTransaction = (transaction) => {
+        setTransactionToDelete(transaction);
+        setDeleteModalVisible(true);
+    };
+
+    const performDeleteTransaction = async (transaction) => {
+        try {
+            const token = await AsyncStorage.getItem('token');
+            if (!token) {
+                Alert.alert('Error', 'Please login again');
+                return;
+            }
+
+            // Determine the correct API endpoint based on transaction type
+            let deleteUrl = '';
+            if (transaction.isGroupTransaction) {
+                deleteUrl = `${API_BASE_URL}/api/v1/splits/group-transactions/${transaction._id}`;
+            } else if (transaction.isContactTransaction) {
+                // Contact transactions don't have a delete endpoint, use personal delete
+                deleteUrl = `${API_BASE_URL}/api/v1/personal/delete-transaction/${transaction._id}`;
+            } else {
+                deleteUrl = `${API_BASE_URL}/api/v1/personal/delete-transaction/${transaction._id}`;
+            }
+
+            console.log('Deleting transaction:', transaction._id, 'Type:', transaction.isGroupTransaction ? 'Group' : transaction.isContactTransaction ? 'Contact' : 'Personal');
+            console.log('Delete URL:', deleteUrl);
+
+            const response = await axios.delete(deleteUrl, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+
+            console.log('Delete response:', response.data);
+
+            if (response.data.success) {
+                // Remove the transaction from local state
+                setAllTransactions(prev => prev.filter(t => t._id !== transaction._id));
+                setTransactions(prev => prev.filter(t => t._id !== transaction._id));
+
+                // Close modal and show success
+                setDeleteModalVisible(false);
+                setTransactionToDelete(null);
+
+                // Show different success messages based on transaction type
+                if (transaction.isGroupTransaction) {
+                    Alert.alert('Success', 'Group transaction deleted successfully. All group members have been notified.');
+                } else {
+                    Alert.alert('Success', 'Transaction deleted successfully');
+                }
+            } else {
+                setDeleteModalVisible(false);
+                setTransactionToDelete(null);
+                Alert.alert('Error', response.data.message || 'Failed to delete transaction');
+            }
+        } catch (error) {
+            console.error('Error deleting transaction:', error);
+
+            setDeleteModalVisible(false);
+            setTransactionToDelete(null);
+
+            let errorMessage = 'Failed to delete transaction. Please try again.';
+
+            if (error.response) {
+                if (error.response.status === 404) {
+                    errorMessage = 'Transaction not found or delete endpoint not available.';
+                } else if (error.response.status === 403) {
+                    errorMessage = 'You do not have permission to delete this transaction.';
+                } else if (error.response.status === 401) {
+                    errorMessage = 'Please login again to delete transactions.';
+                } else if (error.response.data?.message) {
+                    errorMessage = error.response.data.message;
+                }
+            }
+
+            Alert.alert('Error', errorMessage);
+        }
+    };
+
     const renderItem = ({ item }) => {
 
         const type = getType(item);
@@ -460,7 +539,12 @@ const AllViewTrans = () => {
         }
 
         return (
-            <TouchableOpacity onPress={() => handleTransactionPress(item)} activeOpacity={0.8}>
+            <TouchableOpacity
+                onPress={() => handleTransactionPress(item)}
+                onLongPress={() => handleDeleteTransaction(item)}
+                activeOpacity={0.8}
+                delayLongPress={500}
+            >
                 <View style={styles.transactionCard}>
                     <View style={styles.cardLeft}>
                         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
@@ -748,12 +832,16 @@ const AllViewTrans = () => {
                                             const badge = typeBadge(type);
                                             const isIncome = item.transactionType === 'income';
                                             return (
-                                                <View
+                                                <TouchableOpacity
                                                     style={[
                                                         styles.tableRow,
                                                         idx % 2 === 1 && styles.tableRowAlt // alternate row color
                                                     ]}
                                                     key={item._id}
+                                                    onPress={() => handleTransactionPress(item)}
+                                                    onLongPress={() => handleDeleteTransaction(item)}
+                                                    activeOpacity={0.8}
+                                                    delayLongPress={500}
                                                 >
                                                     <Text
                                                         style={[styles.tableCell, styles.tableCellTitle, { width: 200 }]}
@@ -801,7 +889,7 @@ const AllViewTrans = () => {
                                                                     : ''}
                                                         </Text>
                                                     </View>
-                                                </View>
+                                                </TouchableOpacity>
                                             );
                                         })
                                     )}
@@ -877,27 +965,41 @@ const AllViewTrans = () => {
                         <View style={styles.modalContent}>
                             {selectedTransaction && (
                                 <>
-                                    {/* Show sender name + 'paid you' for contact income transactions where user is receiver */}
-                                    {selectedTransaction.isContactTransaction && selectedTransaction.contact && selectedTransaction.contact.user && String(selectedTransaction.contact.user) === String(userId) ? (
-                                        (() => {
-                                            let showSomeonePaidYou = false;
-                                            let payerName = selectedTransaction.user && (selectedTransaction.user.firstName || selectedTransaction.user.lastName)
-                                                ? `${selectedTransaction.user.firstName || ''} ${selectedTransaction.user.lastName || ''}`.trim()
-                                                : selectedTransaction.user && selectedTransaction.user.phoneNumber
-                                                    ? selectedTransaction.user.phoneNumber
-                                                    : '';
-                                            if (!payerName) {
-                                                showSomeonePaidYou = true;
-                                            }
-                                            return (
-                                                <Text style={styles.modalTitle}>
-                                                    {payerName ? `${payerName} paid you` : 'Someone paid you'}
-                                                </Text>
-                                            );
-                                        })()
-                                    ) : (
-                                        <Text style={styles.modalTitle}>{selectedTransaction.title}</Text>
-                                    )}
+                                    {/* Modal Header with Delete Icon */}
+                                    <View style={styles.modalHeader}>
+                                        <View style={styles.modalHeaderLeft}>
+                                            {/* Show sender name + 'paid you' for contact income transactions where user is receiver */}
+                                            {selectedTransaction.isContactTransaction && selectedTransaction.contact && selectedTransaction.contact.user && String(selectedTransaction.contact.user) === String(userId) ? (
+                                                (() => {
+                                                    let showSomeonePaidYou = false;
+                                                    let payerName = selectedTransaction.user && (selectedTransaction.user.firstName || selectedTransaction.user.lastName)
+                                                        ? `${selectedTransaction.user.firstName || ''} ${selectedTransaction.user.lastName || ''}`.trim()
+                                                        : selectedTransaction.user && selectedTransaction.user.phoneNumber
+                                                            ? selectedTransaction.user.phoneNumber
+                                                            : '';
+                                                    if (!payerName) {
+                                                        showSomeonePaidYou = true;
+                                                    }
+                                                    return (
+                                                        <Text style={styles.modalTitle}>
+                                                            {payerName ? `${payerName} paid you` : 'Someone paid you'}
+                                                        </Text>
+                                                    );
+                                                })()
+                                            ) : (
+                                                <Text style={styles.modalTitle}>{selectedTransaction.title}</Text>
+                                            )}
+                                        </View>
+                                        <TouchableOpacity
+                                            style={styles.modalDeleteIcon}
+                                            onPress={() => {
+                                                setModalVisible(false);
+                                                handleDeleteTransaction(selectedTransaction);
+                                            }}
+                                        >
+                                            <Ionicons name="trash-outline" size={24} color="#ef4444" />
+                                        </TouchableOpacity>
+                                    </View>
                                     {/* Modal amount: use + and green for income, - and red for expense, and for contacts use role */}
                                     {selectedTransaction.isContactTransaction ? (
                                         (() => {
@@ -977,6 +1079,74 @@ const AllViewTrans = () => {
                                     </TouchableOpacity>
                                 </>
                             )}
+                        </View>
+                    </View>
+                </Modal>
+
+                {/* Delete Confirmation Modal */}
+                <Modal
+                    visible={deleteModalVisible}
+                    transparent
+                    animationType="fade"
+                    onRequestClose={() => setDeleteModalVisible(false)}
+                >
+                    <View style={styles.deleteModalOverlay}>
+                        <View style={styles.deleteModalContainer}>
+                            <View style={styles.deleteModalHeader}>
+                                <View style={styles.deleteModalIconContainer}>
+                                    <Ionicons
+                                        name="warning"
+                                        size={32}
+                                        color={transactionToDelete?.isGroupTransaction ? "#f59e0b" : "#ef4444"}
+                                    />
+                                </View>
+                                <Text style={styles.deleteModalTitle}>
+                                    {transactionToDelete?.isGroupTransaction ? "Delete Group Transaction" : "Delete Transaction"}
+                                </Text>
+                            </View>
+
+                            <View style={styles.deleteModalContent}>
+                                {transactionToDelete?.isGroupTransaction ? (
+                                    <>
+                                        <Text style={styles.deleteModalText}>
+                                            This transaction is part of "{transactionToDelete?.group?.name || 'the group'}" and involves other members.
+                                        </Text>
+                                        <Text style={styles.deleteModalSubtext}>
+                                            Deleting this transaction will:
+                                        </Text>
+                                        <View style={styles.deleteModalList}>
+                                            <Text style={styles.deleteModalListItem}>• Remove it from all group members' records</Text>
+                                            <Text style={styles.deleteModalListItem}>• Update everyone's balances and settlements</Text>
+                                            <Text style={styles.deleteModalListItem}>• Affect the group's financial calculations</Text>
+                                        </View>
+                                        <Text style={styles.deleteModalWarning}>
+                                            This action cannot be undone.
+                                        </Text>
+                                    </>
+                                ) : (
+                                    <Text style={styles.deleteModalText}>
+                                        Are you sure you want to delete this transaction? This action cannot be undone.
+                                    </Text>
+                                )}
+                            </View>
+
+                            <View style={styles.deleteModalButtons}>
+                                <TouchableOpacity
+                                    style={styles.deleteModalCancelButton}
+                                    onPress={() => {
+                                        setDeleteModalVisible(false);
+                                        setTransactionToDelete(null);
+                                    }}
+                                >
+                                    <Text style={styles.deleteModalCancelText}>Cancel</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    style={styles.deleteModalDeleteButton}
+                                    onPress={() => performDeleteTransaction(transactionToDelete)}
+                                >
+                                    <Text style={styles.deleteModalDeleteText}>Delete</Text>
+                                </TouchableOpacity>
+                            </View>
                         </View>
                     </View>
                 </Modal>
@@ -1343,10 +1513,31 @@ const styles = StyleSheet.create({
         padding: 24,
         alignItems: 'stretch',
     },
+    modalHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 20,
+        paddingBottom: 16,
+        borderBottomWidth: 1,
+        borderBottomColor: '#f1f5f9',
+    },
+    modalHeaderLeft: {
+        flex: 1,
+    },
+    modalDeleteIcon: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        backgroundColor: '#fef2f2',
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderWidth: 1,
+        borderColor: '#fecaca',
+    },
     modalTitle: {
         fontSize: 20,
         fontWeight: '700',
-        marginBottom: 10,
         color: '#222',
         textAlign: 'center',
     },
@@ -1477,6 +1668,113 @@ const styles = StyleSheet.create({
         fontWeight: '700',
         fontSize: 16,
         marginLeft: 8,
+    },
+    // Delete Modal Styles
+    deleteModalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        paddingHorizontal: 20,
+    },
+    deleteModalContainer: {
+        backgroundColor: '#fff',
+        borderRadius: 20,
+        padding: 24,
+        width: '100%',
+        maxWidth: 400,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.25,
+        shadowRadius: 20,
+        elevation: 10,
+    },
+    deleteModalHeader: {
+        alignItems: 'center',
+        marginBottom: 20,
+    },
+    deleteModalIconContainer: {
+        width: 64,
+        height: 64,
+        borderRadius: 32,
+        backgroundColor: '#fef2f2',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: 16,
+    },
+    deleteModalTitle: {
+        fontSize: 20,
+        fontWeight: '700',
+        color: '#1e293b',
+        textAlign: 'center',
+    },
+    deleteModalContent: {
+        marginBottom: 24,
+    },
+    deleteModalText: {
+        fontSize: 16,
+        color: '#64748b',
+        lineHeight: 24,
+        textAlign: 'center',
+        marginBottom: 16,
+    },
+    deleteModalSubtext: {
+        fontSize: 16,
+        color: '#374151',
+        fontWeight: '600',
+        marginBottom: 12,
+        textAlign: 'center',
+    },
+    deleteModalList: {
+        marginBottom: 16,
+    },
+    deleteModalListItem: {
+        fontSize: 14,
+        color: '#64748b',
+        lineHeight: 20,
+        marginBottom: 8,
+        paddingLeft: 8,
+    },
+    deleteModalWarning: {
+        fontSize: 14,
+        color: '#ef4444',
+        fontWeight: '600',
+        textAlign: 'center',
+        backgroundColor: '#fef2f2',
+        padding: 12,
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: '#fecaca',
+    },
+    deleteModalButtons: {
+        flexDirection: 'row',
+        gap: 12,
+    },
+    deleteModalCancelButton: {
+        flex: 1,
+        alignItems: 'center',
+        paddingVertical: 14,
+        borderRadius: 12,
+        backgroundColor: '#f8fafc',
+        borderWidth: 1,
+        borderColor: '#e5e7eb',
+    },
+    deleteModalCancelText: {
+        color: '#64748b',
+        fontSize: 16,
+        fontWeight: '600',
+    },
+    deleteModalDeleteButton: {
+        flex: 1,
+        alignItems: 'center',
+        paddingVertical: 14,
+        borderRadius: 12,
+        backgroundColor: '#ef4444',
+    },
+    deleteModalDeleteText: {
+        color: '#fff',
+        fontSize: 16,
+        fontWeight: '600',
     },
 });
 
