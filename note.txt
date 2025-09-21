@@ -1,4 +1,20 @@
-   cd android
-   ./gradlew assembleRelease
+cd android
+./gradlew assembleRelease
+cd..
+npx expo prebuild --platform android --clean
+npm install -g @expo/eas-cli
+npm install -g eas-cli
+eas build:configure
+eas build --platform android --profile preview
+npx expo install --fix
+npx expo run:android --variant release
+dir android\app\build\outputs\apk\release\
+copy android\app\build\outputs\apk\release\app-release.apk FinanceFlow-Release.apk
 
-   npx expo prebuild --platform android --clean
+
+
+
+cd ..; git status
+git add .
+git commit -m "Add EAS build configuration and generate release APK
+git push origin main
