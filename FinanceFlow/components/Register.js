@@ -1,7 +1,7 @@
 import { Feather, MaterialIcons, Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import React, { useState } from 'react';
-import { StyleSheet, Text, TextInput, TouchableOpacity, View, Alert, StatusBar, Dimensions } from 'react-native';
+import { StyleSheet, Text, TextInput, TouchableOpacity, View, Alert, StatusBar, Dimensions, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import axios from 'axios';
@@ -138,7 +138,12 @@ const Register = () => {
 
 
 
-            <View style={styles.scrollContainer}>
+            <ScrollView
+                style={styles.scrollContainer}
+                contentContainerStyle={styles.scrollContent}
+                showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
+            >
                 <View style={styles.card}>
                     <View style={styles.welcomeSection}>
                         <View style={styles.iconContainer}>
@@ -298,7 +303,7 @@ const Register = () => {
                         </TouchableOpacity>
                     </View>
                 </View>
-            </View>
+            </ScrollView>
         </SafeAreaView>
     );
 };
@@ -341,8 +346,11 @@ const styles = StyleSheet.create({
     },
     scrollContainer: {
         flex: 1,
+    },
+    scrollContent: {
         paddingHorizontal: 20,
         paddingBottom: 30,
+        flexGrow: 1,
     },
     card: {
         backgroundColor: '#ffffff',

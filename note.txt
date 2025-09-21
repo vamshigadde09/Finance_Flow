@@ -79,4 +79,20 @@ git status
 git add .
 git commit -m "Update project with latest changes"
 git push origin main
+
+=== RECOMMENDED BUILD WORKFLOW ===
+
+1. Commit code changes first:
+cd ..
+git add .
+git commit -m "Add ScrollView to Register component for better UX"
 git push origin main
+
+2. Then build APK:
+cd FinanceFlow
+npx expo install --fix
+npx expo run:android --variant release
+dir android\app\build\outputs\apk\release\
+copy android\app\build\outputs\apk\release\app-release.apk FinanceFlow-Release.apk
+
+3. APK files are excluded from Git (due to size limits)
