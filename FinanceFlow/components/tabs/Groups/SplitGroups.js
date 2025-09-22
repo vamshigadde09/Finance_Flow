@@ -941,7 +941,7 @@ const SplitGroups = () => {
             if (response.data.success) {
                 setLeaveGroupModal(false);
                 navigation.goBack();
-                
+
             } else {
                 Alert.alert("Error", response.data.message || "Failed to leave group");
             }
@@ -1174,8 +1174,8 @@ const SplitGroups = () => {
 
 
 
-            // Navigate to ContactTransactionChat
-            navigation.navigate('ContactTransactionChat', {
+            // Navigate directly to ContactTran
+            navigation.navigate('ContactTran', {
                 contact: {
                     name: formattedMember.name,
                     phoneNumbers: [{ number: formattedMember.phoneNumber }],
@@ -1185,7 +1185,8 @@ const SplitGroups = () => {
                 sentamount: amount.toString(),
                 groupId: groupData?._id,
                 groupName: groupData?.name,
-                isSettleUp: true
+                isSettleUp: true,
+                title: `Settle up for ${groupData?.name || 'split'} group`
             });
 
         } catch (error) {
