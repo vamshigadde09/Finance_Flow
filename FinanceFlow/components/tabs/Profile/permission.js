@@ -9,7 +9,8 @@ import {
     Linking,
     Platform,
     StatusBar,
-    Dimensions
+    Dimensions,
+    Modal
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -58,6 +59,8 @@ const Permission = ({ navigation }) => {
     });
 
     const [loading, setLoading] = useState({});
+    const [permissionModalVisible, setPermissionModalVisible] = useState(false);
+    const [permissionModalData, setPermissionModalData] = useState({ title: '', message: '' });
 
     const permissionList = [
         {
@@ -280,14 +283,11 @@ const Permission = ({ navigation }) => {
             }));
 
             if (result.status === 'denied') {
-                Alert.alert(
-                    'Permission Required',
-                    'This permission is required for the app to function properly. Please enable it in your device settings.',
-                    [
-                        { text: 'Cancel', style: 'cancel' },
-                        { text: 'Open Settings', onPress: () => Linking.openSettings() }
-                    ]
-                );
+                setPermissionModalData({
+                    title: 'Permission Required',
+                    message: 'This permission is required for the app to function properly. Please enable it in your device settings.'
+                });
+                setPermissionModalVisible(true);
             }
         } catch (error) {
             console.error(`Error requesting ${permissionType} permission:`, error);
@@ -459,6 +459,49 @@ const Permission = ({ navigation }) => {
                     </TouchableOpacity>
                 </View>
             </ScrollView>
+
+            {/* Permission Required Modal */}
+            <Modal
+                visible={permissionModalVisible}
+                transparent
+                animationType="fade"
+                onRequestClose={() => setPermissionModalVisible(false)}
+            >
+                <View style={styles.modalOverlay}>
+                    <View style={styles.modalContainer}>
+                        <View style={styles.modalHeader}>
+                            <View style={styles.modalIconContainer}>
+                                <Ionicons name="warning" size={32} color="#f59e0b" />
+                            </View>
+                            <Text style={styles.modalTitle}>{permissionModalData.title}</Text>
+                        </View>
+
+                        <View style={styles.modalContent}>
+                            <Text style={styles.modalText}>
+                                {permissionModalData.message}
+                            </Text>
+                        </View>
+
+                        <View style={styles.modalButtons}>
+                            <TouchableOpacity
+                                style={styles.modalCancelButton}
+                                onPress={() => setPermissionModalVisible(false)}
+                            >
+                                <Text style={styles.modalCancelText}>Cancel</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={styles.modalSettingsButton}
+                                onPress={() => {
+                                    setPermissionModalVisible(false);
+                                    Linking.openSettings();
+                                }}
+                            >
+                                <Text style={styles.modalSettingsText}>Open Settings</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
         </SafeAreaView>
     );
 };
@@ -726,6 +769,84 @@ const styles = StyleSheet.create({
         color: '#8b5cf6',
         marginLeft: 6,
         letterSpacing: 0.3,
+    },
+    // Modal Styles
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        paddingHorizontal: 20,
+    },
+    modalContainer: {
+        backgroundColor: '#fff',
+        borderRadius: 20,
+        padding: 24,
+        width: '100%',
+        maxWidth: 400,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.25,
+        shadowRadius: 20,
+        elevation: 10,
+    },
+    modalHeader: {
+        alignItems: 'center',
+        marginBottom: 20,
+    },
+    modalIconContainer: {
+        width: 64,
+        height: 64,
+        borderRadius: 32,
+        backgroundColor: '#fef3c7',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: 16,
+    },
+    modalTitle: {
+        fontSize: 20,
+        fontWeight: '700',
+        color: '#1e293b',
+        textAlign: 'center',
+    },
+    modalContent: {
+        marginBottom: 24,
+    },
+    modalText: {
+        fontSize: 16,
+        color: '#64748b',
+        lineHeight: 24,
+        textAlign: 'center',
+    },
+    modalButtons: {
+        flexDirection: 'row',
+        gap: 12,
+    },
+    modalCancelButton: {
+        flex: 1,
+        alignItems: 'center',
+        paddingVertical: 14,
+        borderRadius: 12,
+        backgroundColor: '#f8fafc',
+        borderWidth: 1,
+        borderColor: '#e5e7eb',
+    },
+    modalCancelText: {
+        color: '#64748b',
+        fontSize: 16,
+        fontWeight: '600',
+    },
+    modalSettingsButton: {
+        flex: 1,
+        alignItems: 'center',
+        paddingVertical: 14,
+        borderRadius: 12,
+        backgroundColor: '#8b5cf6',
+    },
+    modalSettingsText: {
+        color: '#fff',
+        fontSize: 16,
+        fontWeight: '600',
     },
 });
 

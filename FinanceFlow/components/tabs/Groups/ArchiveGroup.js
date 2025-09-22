@@ -9,7 +9,8 @@ import {
     RefreshControl,
     Alert,
     Animated,
-    Vibration
+    Vibration,
+    Modal
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
@@ -24,6 +25,10 @@ const ArchiveGroup = ({ navigation }) => {
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [skeletonAnim] = useState(new Animated.Value(0));
+    const [restoreModalVisible, setRestoreModalVisible] = useState(false);
+    const [groupToRestore, setGroupToRestore] = useState(null);
+    const [errorModalVisible, setErrorModalVisible] = useState(false);
+    const [errorMessage, setErrorMessage] = useState('');
 
     useEffect(() => {
         fetchArchivedGroups();
@@ -51,7 +56,8 @@ const ArchiveGroup = ({ navigation }) => {
         try {
             const userData = await AsyncStorage.getItem("userData");
             if (!userData) {
-                Alert.alert("Error", "User session expired. Please login again.");
+                setErrorMessage("User session expired. Please login again.");
+                setErrorModalVisible(true);
                 navigation.navigate("Login");
                 return;
             }
@@ -69,14 +75,13 @@ const ArchiveGroup = ({ navigation }) => {
             if (response.data.success) {
                 setArchivedGroups(response.data.archivedGroups || []);
             } else {
-                Alert.alert("Error", response.data.message || "Failed to fetch archived groups");
+                setErrorMessage(response.data.message || "Failed to fetch archived groups");
+                setErrorModalVisible(true);
             }
         } catch (error) {
             console.error("Error fetching archived groups:", error);
-            Alert.alert(
-                "Error",
-                error.response?.data?.message || "Failed to fetch archived groups. Please try again."
-            );
+            setErrorMessage(error.response?.data?.message || "Failed to fetch archived groups. Please try again.");
+            setErrorModalVisible(true);
         } finally {
             setLoading(false);
             setRefreshing(false);
@@ -87,59 +92,53 @@ const ArchiveGroup = ({ navigation }) => {
         try {
             const userData = await AsyncStorage.getItem("userData");
             if (!userData) {
-                Alert.alert("Error", "User session expired. Please login again.");
+                setErrorMessage("User session expired. Please login again.");
+                setErrorModalVisible(true);
                 navigation.navigate("Login");
                 return;
             }
 
             const user = JSON.parse(userData);
 
-            Alert.alert(
-                "Restore Group",
-                `Are you sure you want to restore "${groupName}"? This group will be visible in your groups list again.`,
-                [
-                    {
-                        text: "Cancel",
-                        style: "cancel"
-                    },
-                    {
-                        text: "Restore",
-                        style: "default",
-                        onPress: async () => {
-                            try {
-                                const response = await axios.post(
-                                    `${API_BASE_URL}/api/v1/splits/restore-group`,
-                                    { groupId },
-                                    {
-                                        headers: {
-                                            Authorization: `Bearer ${user.token}`,
-                                        },
-                                    }
-                                );
-
-                                if (response.data.success) {
-                                    Alert.alert("Success", "Group restored successfully!");
-                                    // Remove the group from archived list
-                                    setArchivedGroups(prevGroups =>
-                                        prevGroups.filter(group => group._id !== groupId)
-                                    );
-                                } else {
-                                    Alert.alert("Error", response.data.message || "Failed to restore group");
-                                }
-                            } catch (error) {
-                                console.error("Error restoring group:", error);
-                                Alert.alert(
-                                    "Error",
-                                    error.response?.data?.message || "Failed to restore group. Please try again."
-                                );
-                            }
-                        }
-                    }
-                ]
-            );
+            setGroupToRestore({ groupId, groupName, user });
+            setRestoreModalVisible(true);
         } catch (error) {
             console.error("Error in restoreGroup:", error);
-            Alert.alert("Error", "An unexpected error occurred. Please try again.");
+            setErrorMessage("An unexpected error occurred. Please try again.");
+            setErrorModalVisible(true);
+        }
+    };
+
+    const performRestoreGroup = async () => {
+        if (!groupToRestore) return;
+
+        try {
+            const response = await axios.post(
+                `${API_BASE_URL}/api/v1/splits/restore-group`,
+                { groupId: groupToRestore.groupId },
+                {
+                    headers: {
+                        Authorization: `Bearer ${groupToRestore.user.token}`,
+                    },
+                }
+            );
+
+            if (response.data.success) {
+                // Remove the group from archived list
+                setArchivedGroups(prevGroups =>
+                    prevGroups.filter(group => group._id !== groupToRestore.groupId)
+                );
+                // Close modal
+                setRestoreModalVisible(false);
+                setGroupToRestore(null);
+            } else {
+                setErrorMessage(response.data.message || "Failed to restore group");
+                setErrorModalVisible(true);
+            }
+        } catch (error) {
+            console.error("Error restoring group:", error);
+            setErrorMessage(error.response?.data?.message || "Failed to restore group. Please try again.");
+            setErrorModalVisible(true);
         }
     };
 
@@ -279,6 +278,89 @@ const ArchiveGroup = ({ navigation }) => {
                     )
                 }
             />
+
+            {/* Restore Confirmation Modal */}
+            <Modal
+                visible={restoreModalVisible}
+                transparent
+                animationType="fade"
+                onRequestClose={() => setRestoreModalVisible(false)}
+            >
+                <View style={styles.modalOverlay}>
+                    <View style={styles.modalContainer}>
+                        <View style={styles.modalHeader}>
+                            <View style={styles.modalIconContainer}>
+                                <Ionicons name="refresh" size={32} color="#22c55e" />
+                            </View>
+                            <Text style={styles.modalTitle}>Restore Group</Text>
+                        </View>
+
+                        <View style={styles.modalContent}>
+                            <Text style={styles.modalText}>
+                                Are you sure you want to restore "{groupToRestore?.groupName}"?
+                            </Text>
+                            <Text style={styles.modalSubtext}>
+                                This group will be visible in your groups list again.
+                            </Text>
+                        </View>
+
+                        <View style={styles.modalButtons}>
+                            <TouchableOpacity
+                                style={styles.modalCancelButton}
+                                onPress={() => {
+                                    setRestoreModalVisible(false);
+                                    setGroupToRestore(null);
+                                }}
+                            >
+                                <Text style={styles.modalCancelText}>Cancel</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={styles.modalRestoreButton}
+                                onPress={performRestoreGroup}
+                            >
+                                <Text style={styles.modalRestoreText}>Restore</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
+
+            {/* Error Modal */}
+            <Modal
+                visible={errorModalVisible}
+                transparent
+                animationType="fade"
+                onRequestClose={() => setErrorModalVisible(false)}
+            >
+                <View style={styles.modalOverlay}>
+                    <View style={styles.modalContainer}>
+                        <View style={styles.modalHeader}>
+                            <View style={[styles.modalIconContainer, { backgroundColor: '#fee2e2' }]}>
+                                <Ionicons name="alert-circle" size={32} color="#ef4444" />
+                            </View>
+                            <Text style={styles.modalTitle}>Error</Text>
+                        </View>
+
+                        <View style={styles.modalContent}>
+                            <Text style={styles.modalText}>
+                                {errorMessage}
+                            </Text>
+                        </View>
+
+                        <View style={styles.modalButtons}>
+                            <TouchableOpacity
+                                style={[styles.modalRestoreButton, { backgroundColor: '#ef4444' }]}
+                                onPress={() => {
+                                    setErrorModalVisible(false);
+                                    setErrorMessage('');
+                                }}
+                            >
+                                <Text style={styles.modalRestoreText}>OK</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
         </SafeAreaView>
     );
 };
@@ -429,5 +511,90 @@ const styles = StyleSheet.create({
         backgroundColor: Colors.border,
         borderRadius: 7,
         width: '40%',
+    },
+    // Modal Styles
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        paddingHorizontal: 20,
+    },
+    modalContainer: {
+        backgroundColor: '#fff',
+        borderRadius: 20,
+        padding: 24,
+        width: '100%',
+        maxWidth: 400,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.25,
+        shadowRadius: 20,
+        elevation: 10,
+    },
+    modalHeader: {
+        alignItems: 'center',
+        marginBottom: 20,
+    },
+    modalIconContainer: {
+        width: 64,
+        height: 64,
+        borderRadius: 32,
+        backgroundColor: '#dcfce7',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: 16,
+    },
+    modalTitle: {
+        fontSize: 20,
+        fontWeight: '700',
+        color: '#1e293b',
+        textAlign: 'center',
+    },
+    modalContent: {
+        marginBottom: 24,
+    },
+    modalText: {
+        fontSize: 16,
+        color: '#64748b',
+        lineHeight: 24,
+        textAlign: 'center',
+        marginBottom: 12,
+    },
+    modalSubtext: {
+        fontSize: 14,
+        color: '#94a3b8',
+        lineHeight: 20,
+        textAlign: 'center',
+    },
+    modalButtons: {
+        flexDirection: 'row',
+        gap: 12,
+    },
+    modalCancelButton: {
+        flex: 1,
+        alignItems: 'center',
+        paddingVertical: 14,
+        borderRadius: 12,
+        backgroundColor: '#f8fafc',
+        borderWidth: 1,
+        borderColor: '#e5e7eb',
+    },
+    modalCancelText: {
+        color: '#64748b',
+        fontSize: 16,
+        fontWeight: '600',
+    },
+    modalRestoreButton: {
+        flex: 1,
+        alignItems: 'center',
+        paddingVertical: 14,
+        borderRadius: 12,
+        backgroundColor: '#22c55e',
+    },
+    modalRestoreText: {
+        color: '#fff',
+        fontSize: 16,
+        fontWeight: '600',
     },
 });

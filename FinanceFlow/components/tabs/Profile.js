@@ -214,12 +214,12 @@ const Profile = () => {
                             subtitle="Link and manage bank accounts"
                             onPress={() => navigation.navigate('BankAccount')}
                         />
-                        <ProfileListItem
+                        {/* <ProfileListItem
                             icon={<Feather name="shield" size={22} color={Colors.primary} />}
                             label="Privacy & Security"
                             subtitle="Control your privacy settings"
                             onPress={() => navigation.navigate('UserGuide')}
-                        />
+                        /> */}
                         <ProfileListItem
                             icon={<Ionicons name="shield-checkmark-outline" size={24} color="#8b5cf6" />}
                             label="App Permissions"

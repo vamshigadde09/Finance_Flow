@@ -107,6 +107,8 @@ const SplitGroups = () => {
     const [activeFilter, setActiveFilter] = useState('all'); // 'all', 'youOwe', 'youreOwed'
     const [groupBalances, setGroupBalances] = useState({}); // Store balances for each group
     const [showMenu, setShowMenu] = useState(false);
+    const [archiveModalVisible, setArchiveModalVisible] = useState(false);
+    const [groupToArchive, setGroupToArchive] = useState(null);
     const fadeAnim = useRef(new Animated.Value(1)).current;
     const scaleAnim = useRef(new Animated.Value(1)).current;
     const rotateAnim = useRef(new Animated.Value(0)).current;
@@ -278,52 +280,52 @@ const SplitGroups = () => {
 
             const user = JSON.parse(userData);
 
-            Alert.alert(
-                "Archive Group",
-                `Are you sure you want to archive "${groupName}"? This group will be hidden from your view but other members can still see it.`,
-                [
-                    {
-                        text: "Cancel",
-                        style: "cancel"
-                    },
-                    {
-                        text: "Archive",
-                        style: "destructive",
-                        onPress: async () => {
-                            try {
-                                const response = await axios.post(
-                                    `${API_BASE_URL}/api/v1/splits/archive-group`,
-                                    { groupId },
-                                    {
-                                        headers: {
-                                            Authorization: `Bearer ${user.token}`,
-                                        },
-                                    }
-                                );
-
-                                if (response.data.success) {
-                                    Alert.alert("Success", "Group archived successfully!");
-                                    // Remove the group from local state
-                                    setGroups(prevGroups => prevGroups.filter(group => group._id !== groupId));
-                                    // Recalculate summary
-                                    calculateSummary();
-                                } else {
-                                    Alert.alert("Error", response.data.message || "Failed to archive group");
-                                }
-                            } catch (error) {
-                                console.error("Error archiving group:", error);
-                                Alert.alert(
-                                    "Error",
-                                    error.response?.data?.message || "Failed to archive group. Please try again."
-                                );
-                            }
-                        }
-                    }
-                ]
-            );
+            setGroupToArchive({ groupId, groupName });
+            setArchiveModalVisible(true);
         } catch (error) {
             console.error("Error in archiveGroup:", error);
             Alert.alert("Error", "An unexpected error occurred. Please try again.");
+        }
+    };
+
+    const performArchiveGroup = async () => {
+        if (!groupToArchive) return;
+
+        try {
+            const userData = await AsyncStorage.getItem("userData");
+            if (!userData) {
+                Alert.alert("Error", "User session expired. Please login again.");
+                return;
+            }
+
+            const user = JSON.parse(userData);
+            const response = await axios.post(
+                `${API_BASE_URL}/api/v1/splits/archive-group`,
+                { groupId: groupToArchive.groupId },
+                {
+                    headers: {
+                        Authorization: `Bearer ${user.token}`,
+                    },
+                }
+            );
+
+            if (response.data.success) {
+                // Remove the group from local state
+                setGroups(prevGroups => prevGroups.filter(group => group._id !== groupToArchive.groupId));
+                // Recalculate summary
+                calculateSummary();
+                // Close modal
+                setArchiveModalVisible(false);
+                setGroupToArchive(null);
+            } else {
+                Alert.alert("Error", response.data.message || "Failed to archive group");
+            }
+        } catch (error) {
+            console.error("Error archiving group:", error);
+            Alert.alert(
+                "Error",
+                error.response?.data?.message || "Failed to archive group. Please try again."
+            );
         }
     };
 
@@ -714,9 +716,56 @@ const SplitGroups = () => {
                     </View>
                 </TouchableOpacity>
             </Modal>
+
+            {/* Archive Confirmation Modal */}
+            <Modal
+                visible={archiveModalVisible}
+                transparent
+                animationType="fade"
+                onRequestClose={() => setArchiveModalVisible(false)}
+            >
+                <View style={styles.archiveModalOverlay}>
+                    <View style={styles.archiveModalContainer}>
+                        <View style={styles.archiveModalHeader}>
+                            <View style={styles.archiveModalIconContainer}>
+                                <Ionicons name="archive" size={32} color="#f59e0b" />
+                            </View>
+                            <Text style={styles.archiveModalTitle}>Archive Group</Text>
+                        </View>
+
+                        <View style={styles.archiveModalContent}>
+                            <Text style={styles.archiveModalText}>
+                                Are you sure you want to archive "{groupToArchive?.groupName}"?
+                            </Text>
+                            <Text style={styles.archiveModalSubtext}>
+                                This group will be hidden from your view but other members can still see it.
+                            </Text>
+                        </View>
+
+                        <View style={styles.archiveModalButtons}>
+                            <TouchableOpacity
+                                style={styles.archiveModalCancelButton}
+                                onPress={() => {
+                                    setArchiveModalVisible(false);
+                                    setGroupToArchive(null);
+                                }}
+                            >
+                                <Text style={styles.archiveModalCancelText}>Cancel</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={styles.archiveModalArchiveButton}
+                                onPress={performArchiveGroup}
+                            >
+                                <Text style={styles.archiveModalArchiveText}>Archive</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
         </SafeAreaView>
     );
 };
+
 
 const styles = StyleSheet.create({
     container: {
@@ -1114,6 +1163,91 @@ const styles = StyleSheet.create({
     },
     archiveHint: {
         opacity: 0.6,
+    },
+    // Archive Modal Styles
+    archiveModalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        paddingHorizontal: 20,
+    },
+    archiveModalContainer: {
+        backgroundColor: '#fff',
+        borderRadius: 20,
+        padding: 24,
+        width: '100%',
+        maxWidth: 400,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.25,
+        shadowRadius: 20,
+        elevation: 10,
+    },
+    archiveModalHeader: {
+        alignItems: 'center',
+        marginBottom: 20,
+    },
+    archiveModalIconContainer: {
+        width: 64,
+        height: 64,
+        borderRadius: 32,
+        backgroundColor: '#fef3c7',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: 16,
+    },
+    archiveModalTitle: {
+        fontSize: 20,
+        fontWeight: '700',
+        color: '#1e293b',
+        textAlign: 'center',
+    },
+    archiveModalContent: {
+        marginBottom: 24,
+    },
+    archiveModalText: {
+        fontSize: 16,
+        color: '#64748b',
+        lineHeight: 24,
+        textAlign: 'center',
+        marginBottom: 12,
+    },
+    archiveModalSubtext: {
+        fontSize: 14,
+        color: '#94a3b8',
+        lineHeight: 20,
+        textAlign: 'center',
+    },
+    archiveModalButtons: {
+        flexDirection: 'row',
+        gap: 12,
+    },
+    archiveModalCancelButton: {
+        flex: 1,
+        alignItems: 'center',
+        paddingVertical: 14,
+        borderRadius: 12,
+        backgroundColor: '#f8fafc',
+        borderWidth: 1,
+        borderColor: '#e5e7eb',
+    },
+    archiveModalCancelText: {
+        color: '#64748b',
+        fontSize: 16,
+        fontWeight: '600',
+    },
+    archiveModalArchiveButton: {
+        flex: 1,
+        alignItems: 'center',
+        paddingVertical: 14,
+        borderRadius: 12,
+        backgroundColor: '#f59e0b',
+    },
+    archiveModalArchiveText: {
+        color: '#fff',
+        fontSize: 16,
+        fontWeight: '600',
     },
 });
 

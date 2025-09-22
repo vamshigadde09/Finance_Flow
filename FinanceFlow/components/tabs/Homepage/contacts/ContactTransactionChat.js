@@ -25,7 +25,7 @@ const ContactHeader = ({ contact, navigation }) => {
     return (
         <View style={styles.contactHeader}>
             <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-                <Ionicons name="arrow-back" size={24} color="#333" paddingRight={10} />
+                <Ionicons name="chevron-back" size={24} color="#8b5cf6" />
             </TouchableOpacity>
 
             {contact.imageAvailable && contact.image ? (
@@ -63,21 +63,13 @@ const TransactionItem = ({ item, contact, userPhoneNumber, togglePaymentStatus }
                 styles.bubble,
                 isOutgoing ? styles.sentBubble : styles.receivedBubble
             ]}>
-                <View style={styles.amountRow}>
+                <View style={styles.amountContainer}>
                     <Text style={[
                         styles.amountText,
                         isOutgoing ? styles.sentAmountText : styles.receivedAmountText
                     ]}>
                         ₹{item.amount.toFixed(2)}
                     </Text>
-                    <View style={[
-                        styles.statusBadge,
-                        isOutgoing ? styles.sentStatusBadge : styles.receivedStatusBadge
-                    ]}>
-                        <Text style={styles.statusText}>
-                            {isOutgoing ? 'Paid' : 'Received'}
-                        </Text>
-                    </View>
                 </View>
 
                 {item.category && (
@@ -303,7 +295,7 @@ const TransactionChatScreen = ({ route, navigation }) => {
                     isSentByMe: isSender,
                     displayType
                 };
-            }).reverse();
+            });
 
             setTransactions(processedTransactions);
 
@@ -344,7 +336,7 @@ const TransactionChatScreen = ({ route, navigation }) => {
             sentamount: amount,
             groupId: groupId,
             description: route.params.isSettleUp
-                ? `Settle up payment for ${route.params.groupName || 'split'} group`
+                ? `Settle up for ${route.params.groupName || 'split'} group`
                 : '',
             onTransactionComplete: () => {
                 fetchTransactions();
@@ -418,6 +410,8 @@ const TransactionChatScreen = ({ route, navigation }) => {
                         }
                         refreshing={isLoading}
                         onRefresh={fetchTransactions}
+                        inverted={true}
+                        showsVerticalScrollIndicator={false}
                     />
                 )}
 
@@ -439,52 +433,70 @@ const styles = StyleSheet.create({
     },
     container: {
         flex: 1,
-        backgroundColor: '#f8f9fa',
+        backgroundColor: '#f8fafc',
     },
     contactHeader: {
         flexDirection: 'row',
         alignItems: 'center',
-        padding: 10,
-        backgroundColor: '#fff',
+        padding: 16,
+        backgroundColor: '#ffffff',
         borderBottomWidth: 1,
-        borderBottomColor: '#eee',
+        borderBottomColor: '#e5e7eb',
+        shadowColor: '#8b5cf6',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        elevation: 3,
     },
     backButton: {
-        marginRight: 10,
+        marginRight: 12,
+        padding: 8,
+        borderRadius: 12,
+        backgroundColor: '#f3f4f6',
     },
     contactImage: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
+        width: 48,
+        height: 48,
+        borderRadius: 24,
+        borderWidth: 2,
+        borderColor: '#8b5cf6',
     },
     contactImagePlaceholder: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
-        backgroundColor: '#e0e0e0',
+        width: 48,
+        height: 48,
+        borderRadius: 24,
+        backgroundColor: '#8b5cf6',
         justifyContent: 'center',
         alignItems: 'center',
+        borderWidth: 2,
+        borderColor: '#e5e7eb',
     },
     contactInitial: {
-        fontSize: 18,
-        color: '#666',
+        fontSize: 20,
+        color: '#ffffff',
+        fontWeight: '800',
+        letterSpacing: 0.5,
     },
     contactInfo: {
-        marginLeft: 10,
+        marginLeft: 12,
         flex: 1,
     },
     contactName: {
-        fontSize: 16,
-        fontWeight: '600',
+        fontSize: 18,
+        fontWeight: '700',
+        color: '#1f2937',
+        letterSpacing: 0.3,
     },
     contactPhone: {
         fontSize: 14,
-        color: '#666',
+        color: '#6b7280',
+        fontWeight: '600',
+        marginTop: 2,
     },
     messageContainer: {
         width: '100%',
-        paddingHorizontal: 12,
-        marginVertical: 2,
+        paddingHorizontal: 16,
+        marginVertical: 4,
     },
     sentContainer: {
         alignItems: 'flex-end',
@@ -493,184 +505,247 @@ const styles = StyleSheet.create({
         alignItems: 'flex-start',
     },
     bubble: {
-        maxWidth: '75%',
-        padding: 10,
-        borderRadius: 16,
-        elevation: 1,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.08,
-        shadowRadius: 1,
+        maxWidth: '90%',
+        minWidth: 150,
+        padding: 16,
+        borderRadius: 20,
+        shadowColor: '#8b5cf6',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.1,
+        shadowRadius: 8,
+        elevation: 4,
     },
     sentBubble: {
-        backgroundColor: '#E8F5E9',
-        borderTopRightRadius: 4,
+        backgroundColor: '#f0f9ff',
+        borderTopRightRadius: 6,
     },
     receivedBubble: {
-        backgroundColor: '#E3F2FD',
-        borderTopLeftRadius: 4,
+        backgroundColor: '#ffffff',
+        borderTopLeftRadius: 6,
     },
-    amountRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: 4,
+    amountContainer: {
+        flexDirection: 'column',
+        alignItems: 'flex-start',
+        marginBottom: 8,
     },
     amountText: {
-        fontSize: 18,
-        fontWeight: '600',
+        fontSize: 20,
+        fontWeight: '800',
+        letterSpacing: 0.5,
     },
     sentAmountText: {
-        color: '#2E7D32',
+        color: '#8b5cf6',
     },
     receivedAmountText: {
-        color: '#1565C0',
+        color: '#22c55e',
     },
     statusBadge: {
-        paddingHorizontal: 6,
-        paddingVertical: 2,
-        borderRadius: 8,
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 12,
+        shadowColor: '#8b5cf6',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        elevation: 2,
+        marginTop: 4,
     },
     sentStatusBadge: {
-        backgroundColor: '#C8E6C9',
+        backgroundColor: '#e0f2fe',
+        borderWidth: 1,
+        borderColor: '#8b5cf6',
     },
     receivedStatusBadge: {
-        backgroundColor: '#BBDEFB',
+        backgroundColor: '#dcfce7',
+        borderWidth: 1,
+        borderColor: '#22c55e',
     },
     statusText: {
-        fontSize: 11,
-        fontWeight: '500',
+        fontSize: 12,
+        fontWeight: '700',
+        letterSpacing: 0.3,
+    },
+    sentStatusText: {
+        color: '#8b5cf6',
+    },
+    receivedStatusText: {
+        color: '#22c55e',
     },
     categoryContainer: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginBottom: 4,
+        marginBottom: 6,
     },
     categoryText: {
-        fontSize: 12,
-        marginLeft: 3,
+        fontSize: 13,
+        marginLeft: 4,
+        fontWeight: '600',
     },
     sentCategoryText: {
-        color: '#2E7D32',
+        color: '#8b5cf6',
     },
     receivedCategoryText: {
-        color: '#1565C0',
+        color: '#22c55e',
     },
     descriptionText: {
-        fontSize: 13,
-        marginBottom: 4,
-        lineHeight: 16,
+        fontSize: 14,
+        marginBottom: 6,
+        lineHeight: 18,
+        fontWeight: '500',
     },
     sentDescriptionText: {
-        color: '#1B5E20',
+        color: '#1f2937',
     },
     receivedDescriptionText: {
-        color: '#0D47A1',
+        color: '#1f2937',
     },
     footer: {
         flexDirection: 'row',
         justifyContent: 'flex-end',
         alignItems: 'center',
-        marginTop: 2,
+        marginTop: 4,
     },
     timeText: {
-        fontSize: 10,
-        color: '#757575',
-        marginRight: 3,
+        fontSize: 11,
+        color: '#6b7280',
+        marginRight: 4,
+        fontWeight: '500',
     },
     dateText: {
-        fontSize: 10,
-        color: '#757575',
+        fontSize: 11,
+        color: '#6b7280',
+        fontWeight: '500',
     },
     linkButton: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginTop: 4,
-        padding: 6,
-        borderRadius: 6,
+        marginTop: 6,
+        padding: 8,
+        borderRadius: 12,
         alignSelf: 'flex-start',
+        shadowColor: '#8b5cf6',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        elevation: 2,
     },
     sentLinkButton: {
-        backgroundColor: '#C8E6C9',
+        backgroundColor: '#e0f2fe',
+        borderWidth: 1,
+        borderColor: '#8b5cf6',
     },
     receivedLinkButton: {
-        backgroundColor: '#BBDEFB',
+        backgroundColor: '#dcfce7',
+        borderWidth: 1,
+        borderColor: '#22c55e',
     },
     linkText: {
-        marginLeft: 3,
-        fontSize: 11,
-        fontWeight: '500',
+        marginLeft: 4,
+        fontSize: 12,
+        fontWeight: '600',
     },
     sentLinkText: {
-        color: '#2E7D32',
+        color: '#8b5cf6',
     },
     receivedLinkText: {
-        color: '#1565C0',
+        color: '#22c55e',
     },
     actioncontainer: {
-        padding: 10,
-        backgroundColor: '#fff',
+        padding: 16,
+        backgroundColor: '#ffffff',
         borderTopWidth: 1,
-        borderTopColor: '#eee',
+        borderTopColor: '#e5e7eb',
+        shadowColor: '#8b5cf6',
+        shadowOffset: { width: 0, height: -2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        elevation: 3,
     },
     actionButtonsContainer: {
         flexDirection: 'row',
         alignItems: 'center',
+        gap: 12,
     },
     amountInput: {
-        height: 40,
+        height: 48,
         borderWidth: 1,
-        borderColor: '#ddd',
-        borderRadius: 8,
-        paddingHorizontal: 10,
-        marginRight: 10,
+        borderColor: '#e5e7eb',
+        borderRadius: 16,
+        paddingHorizontal: 16,
+        fontSize: 16,
+        backgroundColor: '#ffffff',
+        shadowColor: '#8b5cf6',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        elevation: 2,
+        borderLeftWidth: 3,
+        borderLeftColor: '#8b5cf6',
+        fontWeight: '600',
+        color: '#1f2937',
     },
     actionButton: {
-        height: 40,
+        height: 48,
         justifyContent: 'center',
         alignItems: 'center',
-        borderRadius: 8,
+        borderRadius: 16,
+        shadowColor: '#8b5cf6',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+        elevation: 6,
     },
     payButton: {
-        backgroundColor: '#4CAF50',
+        backgroundColor: '#8b5cf6',
     },
     actionButtonText: {
-        color: '#fff',
-        fontWeight: '600',
+        color: '#ffffff',
+        fontWeight: '700',
+        fontSize: 16,
+        letterSpacing: 0.5,
     },
     listContainer: {
         flexGrow: 1,
-        paddingBottom: 20,
-        paddingHorizontal: 15,
-        paddingTop: 12,
+        paddingBottom: 24,
+        paddingHorizontal: 16,
+        paddingTop: 16,
     },
     emptyStateText: {
         textAlign: 'center',
-        marginTop: 40,
-        color: '#6c757d',
+        marginTop: 60,
+        color: '#6b7280',
         fontSize: 16,
+        fontWeight: '600',
     },
     errorContainer: {
         flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
-        padding: 20,
+        padding: 24,
     },
     errorText: {
-        color: '#dc3545',
+        color: '#ef4444',
         fontSize: 16,
-        marginBottom: 20,
+        marginBottom: 24,
         textAlign: 'center',
+        fontWeight: '600',
     },
     retryButton: {
-        backgroundColor: '#28a745',
-        paddingVertical: 10,
-        paddingHorizontal: 20,
-        borderRadius: 5,
+        backgroundColor: '#8b5cf6',
+        paddingVertical: 12,
+        paddingHorizontal: 24,
+        borderRadius: 16,
+        shadowColor: '#8b5cf6',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+        elevation: 6,
     },
     retryButtonText: {
-        color: 'white',
-        fontWeight: 'bold',
+        color: '#ffffff',
+        fontWeight: '700',
+        fontSize: 16,
+        letterSpacing: 0.5,
     },
 });
 

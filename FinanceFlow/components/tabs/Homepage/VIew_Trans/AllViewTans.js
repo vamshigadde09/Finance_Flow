@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, FlatList, ActivityIndicator, TouchableOpacity, TextInput, ScrollView, Image, Modal, Animated, Alert } from 'react-native';
+import React, { useEffect, useState, useRef } from 'react';
+import { View, Text, StyleSheet, FlatList, ActivityIndicator, TouchableOpacity, TextInput, ScrollView, Image, Modal, Animated, Alert, Switch, RefreshControl } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
@@ -23,7 +23,6 @@ const AllViewTrans = () => {
     const [selectedView, setSelectedView] = useState('Cards'); // 'Cards' or 'Table'
     const [selectedFilter, setSelectedFilter] = useState('All');
     const [selectedTypeFilter, setSelectedTypeFilter] = useState('All');
-    const [filterModalVisible, setFilterModalVisible] = useState(false);
     const [filterType, setFilterType] = useState('All Types');
     const [filterCategory, setFilterCategory] = useState('All Categories');
     const [userId, setUserId] = useState(null);
@@ -31,10 +30,20 @@ const AllViewTrans = () => {
     const navigation = useNavigation();
     const [refreshing, setRefreshing] = useState(false);
     const [selectedTransaction, setSelectedTransaction] = useState(null);
+    const searchInputRef = useRef(null);
+    const [showSearchBar, setShowSearchBar] = useState(false);
     const [modalVisible, setModalVisible] = useState(false);
     const [showFullDetails, setShowFullDetails] = useState(false);
     const [deleteModalVisible, setDeleteModalVisible] = useState(false);
     const [transactionToDelete, setTransactionToDelete] = useState(null);
+
+    // Group selection state
+    const [groups, setGroups] = useState([]);
+    const [selectedGroup, setSelectedGroup] = useState(null);
+    const [showGroupDropdown, setShowGroupDropdown] = useState(false);
+    const [showUserTransactionsOnly, setShowUserTransactionsOnly] = useState(true);
+
+
 
     // Pagination state
     const [currentPage, setCurrentPage] = useState(1);
@@ -74,6 +83,37 @@ const AllViewTrans = () => {
         };
     }, [loading, skeletonOpacity]);
 
+    // Fetch user groups
+    const fetchGroups = async () => {
+        try {
+            const token = await AsyncStorage.getItem('token');
+            const userData = await AsyncStorage.getItem('userData');
+
+            if (!userData) return;
+
+            const user = JSON.parse(userData);
+            const userId = user._id || user.id;
+
+            const response = await axios.get(
+                `${API_BASE_URL}/api/v1/splits/groups/${userId}`,
+                {
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                    },
+                }
+            );
+
+            if (response.data.success && response.data.groups) {
+                console.log('Groups fetched successfully:', response.data.groups);
+                setGroups(response.data.groups || []);
+            } else {
+                console.log('No groups found in response:', response.data);
+            }
+        } catch (error) {
+            console.error('Error fetching groups:', error);
+        }
+    };
+
     // Move fetchTransactions outside useEffect
     const fetchTransactions = async (page = 1, isLoadMore = false) => {
         if (isLoadMore) {
@@ -103,24 +143,61 @@ const AllViewTrans = () => {
             setUserId(uid);
 
             const limit = 25;
-            const [transRes, groupSummaryRes] = await Promise.all([
-                axios.get(
-                    `${API_BASE_URL}/api/v1/personal/get-all-transactions`,
+            let transactionsData = [];
+            let totalPages = 1;
+
+            // If a specific group is selected and we want to show all transactions
+            if (selectedGroup && !showUserTransactionsOnly) {
+                // Fetch all transactions from the specific group
+                console.log('Fetching all group transactions for group:', selectedGroup._id);
+                const groupRes = await axios.get(
+                    `${API_BASE_URL}/api/v1/splits/group-transactions`,
                     {
-                        params: { page, limit },
+                        params: {
+                            groupId: selectedGroup._id,
+                            userId: null, // null means all users
+                            page,
+                            limit,
+                            filterType: 'all'
+                        },
                         headers: { Authorization: `Bearer ${token}` }
                     }
-                ),
-                axios.get(
-                    `${API_BASE_URL}/api/v1/splits/get-total-balances`,
-                    { headers: { Authorization: `Bearer ${token}` } }
-                )
-            ]);
+                );
 
-            const transactionsData = transRes.data.transactions;
-            const totalPages = transRes.data.totalPages || 1;
+                if (groupRes.data.success) {
+                    transactionsData = groupRes.data.transactions;
+                    totalPages = groupRes.data.pagination?.totalPages || 1;
+                    console.log('Fetched group transactions:', transactionsData.length);
+                }
+            } else {
+                // Fetch personal transactions (includes user's group transactions)
+                const [transRes, groupSummaryRes] = await Promise.all([
+                    axios.get(
+                        `${API_BASE_URL}/api/v1/personal/get-all-transactions`,
+                        {
+                            params: { page, limit },
+                            headers: { Authorization: `Bearer ${token}` }
+                        }
+                    ),
+                    axios.get(
+                        `${API_BASE_URL}/api/v1/splits/get-total-balances`,
+                        { headers: { Authorization: `Bearer ${token}` } }
+                    )
+                ]);
 
+                transactionsData = transRes.data.transactions;
+                totalPages = transRes.data.totalPages || 1;
 
+                if (groupSummaryRes.data.success && groupSummaryRes.data.totals) {
+                    const groupData = {
+                        youOwe: parseFloat(groupSummaryRes.data.totals.youOwe) || 0,
+                        owedToYou: parseFloat(groupSummaryRes.data.totals.owedToYou) || 0
+                    };
+                    setGroupSummary(groupData);
+                } else {
+                    setGroupSummary({ youOwe: 0, owedToYou: 0 });
+                }
+            }
 
             if (isLoadMore) {
                 // Append new transactions to existing ones
@@ -138,16 +215,8 @@ const AllViewTrans = () => {
                 setHasMoreData(totalPages > 1);
             }
 
-            if (groupSummaryRes.data.success && groupSummaryRes.data.totals) {
-                const groupData = {
-                    youOwe: parseFloat(groupSummaryRes.data.totals.youOwe) || 0,
-                    owedToYou: parseFloat(groupSummaryRes.data.totals.owedToYou) || 0
-                };
-                setGroupSummary(groupData);
-            } else {
-                setGroupSummary({ youOwe: 0, owedToYou: 0 });
-            }
         } catch (error) {
+            console.error('Error fetching transactions:', error);
             if (!isLoadMore) {
                 setAllTransactions([]);
                 setGroupSummary({ youOwe: 0, owedToYou: 0 });
@@ -160,6 +229,7 @@ const AllViewTrans = () => {
 
     useEffect(() => {
         fetchTransactions(1, false);
+        fetchGroups();
     }, []);
 
     // Reset pagination when filters change
@@ -172,17 +242,24 @@ const AllViewTrans = () => {
         }
     }, [selectedFilter, selectedTypeFilter, filterType, filterCategory, search]);
 
-    // Filter out group transactions not paid by the user (safety in case backend returns extra)
+    // Always refetch when group or my/all toggle changes
+    useEffect(() => {
+        fetchTransactions(1, false);
+    }, [selectedGroup, showUserTransactionsOnly]);
+
+    // Apply safety filter, but allow full group view when "All Transactions" is selected
     useEffect(() => {
         if (userId && allTransactions.length > 0) {
-            const filteredTransactions = allTransactions.filter(t => !t.isGroupTransaction || (t.paidBy && String(t.paidBy) === String(userId)));
-
+            const shouldShowAllGroup = selectedGroup && !showUserTransactionsOnly;
+            const filteredTransactions = allTransactions.filter(t => {
+                if (shouldShowAllGroup && t.isGroupTransaction) return true;
+                return !t.isGroupTransaction || (t.paidBy && String(t.paidBy) === String(userId));
+            });
             setTransactions(filteredTransactions);
         } else {
-
             setTransactions(allTransactions);
         }
-    }, [userId, allTransactions]);
+    }, [userId, allTransactions, selectedGroup, showUserTransactionsOnly]);
 
     // Calculate totals for summary cards (Income, Expenses, Net) with correct logic
     let totalIncome = groupSummary.owedToYou;
@@ -372,6 +449,40 @@ const AllViewTrans = () => {
     if (filterCategory !== 'All Categories') {
         filteredTransactions = filteredTransactions.filter(t => t.category === filterCategory);
     }
+    // Apply group filter
+    if (selectedGroup) {
+        console.log('Filtering for group:', selectedGroup.name, 'ID:', selectedGroup._id);
+        console.log('Current filters - selectedFilter:', selectedFilter, 'selectedTypeFilter:', selectedTypeFilter);
+        console.log('Transactions before group filter:', filteredTransactions.length);
+
+        filteredTransactions = filteredTransactions.filter(t => {
+            // Check multiple possible group ID fields
+            const groupId = t.groupId || t.group?._id || t.group;
+            const isGroupTransaction = groupId && String(groupId) === String(selectedGroup._id);
+
+            console.log('Transaction:', t.title, 'GroupId:', groupId, 'IsGroupTransaction:', isGroupTransaction, 'ShowUserOnly:', showUserTransactionsOnly);
+
+            // First, check if this transaction belongs to the selected group
+            if (!isGroupTransaction) return false;
+
+            // If showing user transactions only, filter by user involvement
+            if (showUserTransactionsOnly) {
+                // Show only transactions where the current user is involved (either paid by or split between)
+                const isUserPayer = t.paidBy && String(t.paidBy) === String(userId);
+                const isUserInSplit = t.splitBetween && t.splitBetween.some(user =>
+                    String(user._id || user) === String(userId)
+                );
+                return isUserPayer || isUserInSplit;
+            } else {
+                // Show ALL transactions from this group (API already fetches all when showUserTransactionsOnly is false)
+                console.log('Showing all group transactions for:', t.title);
+                return true;
+            }
+        });
+
+        console.log('Transactions after group filter:', filteredTransactions.length);
+    }
+
     if (search.trim()) {
         filteredTransactions = filteredTransactions.filter(t =>
             t.title.toLowerCase().includes(search.toLowerCase()) ||
@@ -677,20 +788,51 @@ const AllViewTrans = () => {
                             <Text style={[styles.filterBtnText, selectedFilter === f && styles.filterBtnTextActive]}>{f} {filterCounts[f] !== undefined ? `(${filterCounts[f]})` : ''}</Text>
                         </TouchableOpacity>
                     ))}
-                </View>
-                {/* Search bar */}
-                <View style={styles.searchBarRow}>
-                    <TextInput
-                        style={styles.searchInput}
-                        placeholder="Search transactions..."
-                        placeholderTextColor="#94a3b8"
-                        value={search}
-                        onChangeText={setSearch}
-                    />
-                    <TouchableOpacity style={styles.filterIconBtn} onPress={() => setFilterModalVisible(true)}>
-                        <Ionicons name="filter" size={20} color="#ffffff" />
+                    <TouchableOpacity
+                        style={styles.filterIconChip}
+                        onPress={() => {
+                            const next = !showSearchBar;
+                            setShowSearchBar(next);
+                            if (next) {
+                                setTimeout(() => searchInputRef.current && searchInputRef.current.focus(), 50);
+                            } else {
+                                setSearch('');
+                                if (searchInputRef.current) {
+                                    searchInputRef.current.blur();
+                                }
+                            }
+                        }}
+                        accessibilityLabel="Toggle search"
+                    >
+                        <Ionicons name="search" size={16} color="#64748b" />
                     </TouchableOpacity>
                 </View>
+                {/* Search bar */}
+                {showSearchBar && (
+                    <View style={styles.searchBarRow}>
+                        <TextInput
+                            ref={searchInputRef}
+                            style={styles.searchInput}
+                            placeholder="Search transactions..."
+                            placeholderTextColor="#94a3b8"
+                            value={search}
+                            onChangeText={setSearch}
+                        />
+                        <TouchableOpacity
+                            style={styles.filterIconBtn}
+                            onPress={() => {
+                                setShowSearchBar(false);
+                                setSearch('');
+                                if (searchInputRef.current) {
+                                    searchInputRef.current.blur();
+                                }
+                            }}
+                            accessibilityLabel="Hide search"
+                        >
+                            <Ionicons name="close" size={20} color="#ffffff" />
+                        </TouchableOpacity>
+                    </View>
+                )}
                 {/* Summary cards - Clickable filters */}
                 <View style={styles.summaryRow}>
                     {loading ? (
@@ -737,6 +879,104 @@ const AllViewTrans = () => {
                         </>
                     )}
                 </View>
+
+                {/* Group Selection Dropdown - keep in header only for Table view */}
+                {selectedView === 'Table' && selectedTypeFilter === 'All' && selectedFilter === 'Groups' && (
+                    <View style={styles.groupSelectionContainer}>
+                        <View style={styles.groupDropdownRow}>
+                            <View style={styles.groupDropdownContainer}>
+                                <Text style={styles.groupDropdownLabel}>Select Group:</Text>
+                                <TouchableOpacity
+                                    style={styles.groupDropdownButton}
+                                    onPress={() => setShowGroupDropdown(!showGroupDropdown)}
+                                >
+                                    <Text style={styles.groupDropdownText}>
+                                        {selectedGroup ? selectedGroup.name : 'All Groups'}
+                                    </Text>
+                                    <Ionicons
+                                        name={showGroupDropdown ? "chevron-up" : "chevron-down"}
+                                        size={20}
+                                        color="#8b5cf6"
+                                    />
+                                </TouchableOpacity>
+                            </View>
+
+                            {selectedGroup && (
+                                <View style={styles.transactionFilterContainer}>
+                                    <Text style={styles.transactionFilterLabel}>Show:</Text>
+                                    <View style={styles.switchContainer}>
+                                        <TouchableOpacity onPress={() => setShowUserTransactionsOnly(true)} style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                            <Ionicons name={showUserTransactionsOnly ? 'radio-button-on' : 'radio-button-off'} size={18} color={showUserTransactionsOnly ? '#8b5cf6' : '#9ca3af'} />
+                                            <Text style={[styles.switchLabel, { marginLeft: 6 }]}>My Transactions</Text>
+                                        </TouchableOpacity>
+                                        <TouchableOpacity onPress={() => setShowUserTransactionsOnly(false)} style={{ flexDirection: 'row', alignItems: 'center', marginLeft: 14 }}>
+                                            <Ionicons name={!showUserTransactionsOnly ? 'radio-button-on' : 'radio-button-off'} size={18} color={!showUserTransactionsOnly ? '#8b5cf6' : '#9ca3af'} />
+                                            <Text style={[styles.switchLabel, { marginLeft: 6 }]}>All Transactions</Text>
+                                        </TouchableOpacity>
+                                    </View>
+                                </View>
+                            )}
+                        </View>
+
+                        {/* Group Dropdown List */}
+                        {showGroupDropdown && (
+                            <View style={styles.groupDropdownList}>
+                                <ScrollView
+                                    style={styles.groupDropdownScrollView}
+                                    showsVerticalScrollIndicator={true}
+                                    nestedScrollEnabled={true}
+                                >
+                                    <TouchableOpacity
+                                        style={[
+                                            styles.groupDropdownItem,
+                                            !selectedGroup && styles.groupDropdownItemSelected
+                                        ]}
+                                        onPress={() => {
+                                            setSelectedGroup(null);
+                                            setShowGroupDropdown(false);
+                                        }}
+                                    >
+                                        <Text style={[
+                                            styles.groupDropdownItemText,
+                                            !selectedGroup && styles.groupDropdownItemTextSelected
+                                        ]}>
+                                            All Groups
+                                        </Text>
+                                    </TouchableOpacity>
+                                    {groups.length > 0 ? (
+                                        groups.map((group) => (
+                                            <TouchableOpacity
+                                                key={group._id}
+                                                style={[
+                                                    styles.groupDropdownItem,
+                                                    selectedGroup?._id === group._id && styles.groupDropdownItemSelected
+                                                ]}
+                                                onPress={() => {
+                                                    setSelectedGroup(group);
+                                                    setShowGroupDropdown(false);
+                                                }}
+                                            >
+                                                <Text style={[
+                                                    styles.groupDropdownItemText,
+                                                    selectedGroup?._id === group._id && styles.groupDropdownItemTextSelected
+                                                ]}>
+                                                    {group.name}
+                                                </Text>
+                                            </TouchableOpacity>
+                                        ))
+                                    ) : (
+                                        <View style={styles.groupDropdownItem}>
+                                            <Text style={[styles.groupDropdownItemText, { color: '#9ca3af', fontStyle: 'italic' }]}>
+                                                No groups found
+                                            </Text>
+                                        </View>
+                                    )}
+                                </ScrollView>
+                            </View>
+                        )}
+                    </View>
+                )}
+
                 {/* Transaction list (Cards view) or Table view */}
                 {loading ? (
                     <View style={{ marginTop: 20 }}>
@@ -745,59 +985,133 @@ const AllViewTrans = () => {
                         ))}
                     </View>
                 ) : selectedView === 'Cards' ? (
-                    <View>
-
-                        <FlatList
-                            data={filteredTransactions}
-                            renderItem={renderItem}
-                            keyExtractor={item => item._id}
-                            contentContainerStyle={{ paddingBottom: 30 }}
-                            refreshing={refreshing}
-                            onRefresh={handleRefresh}
-                            onEndReached={handleLoadMore}
-                            onEndReachedThreshold={0.1}
-                            ListEmptyComponent={() => (
-                                <View style={{ alignItems: 'center', marginTop: 50 }}>
-                                    <Text style={{ fontSize: 16, color: '#666', marginBottom: 8 }}>No transactions found</Text>
-                                    <Text style={{ fontSize: 14, color: '#888' }}>Try adjusting your filters or add some transactions</Text>
-                                </View>
-                            )}
-                            ListFooterComponent={() => {
-                                const hasActiveFilters = selectedFilter !== 'All' ||
-                                    selectedTypeFilter !== 'All' ||
-                                    filterType !== 'All Types' ||
-                                    filterCategory !== 'All Categories' ||
-                                    search.trim() !== '';
-
-                                if (loadingMore) {
-                                    return (
-                                        <View style={{ alignItems: 'center', paddingVertical: 20 }}>
-                                            <ActivityIndicator size="small" color="#009CF9" />
-                                            <Text style={{ marginTop: 8, color: '#666', fontSize: 14 }}>Loading more transactions...</Text>
-                                        </View>
-                                    );
-                                } else if (hasActiveFilters) {
-                                    return (
-                                        <View style={{ alignItems: 'center', paddingVertical: 20 }}>
-                                            <Text style={{ color: '#666', fontSize: 14 }}>Showing filtered results</Text>
-                                        </View>
-                                    );
-                                } else if (hasMoreData) {
-                                    return (
-                                        <View style={{ alignItems: 'center', paddingVertical: 20 }}>
-                                            <Text style={{ color: '#666', fontSize: 14 }}>Scroll to load more</Text>
-                                        </View>
-                                    );
-                                } else if (filteredTransactions.length > 0) {
-                                    return (
-                                        <View style={{ alignItems: 'center', paddingVertical: 20 }}>
-                                            <Text style={{ color: '#666', fontSize: 14 }}>No more transactions to load</Text>
-                                        </View>
-                                    );
+                    <View style={{ flex: 1, minHeight: 0 }}>
+                        {filteredTransactions.length === 0 ? (
+                            <View style={{ alignItems: 'center', marginTop: 50 }}>
+                                <Text style={{ fontSize: 16, color: '#666', marginBottom: 8 }}>No transactions found</Text>
+                                <Text style={{ fontSize: 14, color: '#888' }}>Try adjusting your filters or add some transactions</Text>
+                            </View>
+                        ) : (
+                            <ScrollView
+                                style={{ flex: 1 }}
+                                contentContainerStyle={{ paddingBottom: 30 }}
+                                refreshControl={
+                                    <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} colors={["#8b5cf6"]} />
                                 }
-                                return null;
-                            }}
-                        />
+                                nestedScrollEnabled={true}
+                                showsVerticalScrollIndicator={true}
+                            >
+                                {/* Group Selection Dropdown - inside scroll for Cards view */}
+                                {selectedTypeFilter === 'All' && selectedFilter === 'Groups' && (
+                                    <View style={styles.groupSelectionContainer}>
+                                        <View style={styles.groupDropdownRow}>
+                                            <View style={styles.groupDropdownContainer}>
+                                                <Text style={styles.groupDropdownLabel}>Select Group:</Text>
+                                                <TouchableOpacity
+                                                    style={styles.groupDropdownButton}
+                                                    onPress={() => setShowGroupDropdown(!showGroupDropdown)}
+                                                >
+                                                    <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                                                        <Ionicons name="people-outline" size={18} color="#8b5cf6" style={{ marginRight: 8 }} />
+                                                        <Text style={styles.groupDropdownText}>
+                                                            {selectedGroup ? selectedGroup.name : 'All Groups'}
+                                                        </Text>
+                                                        {!!selectedGroup?.memberCount && (
+                                                            <View style={styles.groupBadge}>
+                                                                <Text style={styles.groupBadgeText}>{selectedGroup.memberCount}</Text>
+                                                            </View>
+                                                        )}
+                                                    </View>
+                                                    <Ionicons
+                                                        name={showGroupDropdown ? "chevron-up" : "chevron-down"}
+                                                        size={20}
+                                                        color="#8b5cf6"
+                                                    />
+                                                </TouchableOpacity>
+                                            </View>
+
+                                            {selectedGroup && (
+                                                <View style={styles.transactionFilterContainer}>
+                                                    <Text style={styles.transactionFilterLabel}>Show:</Text>
+                                                    <View style={styles.switchContainer}>
+                                                        <TouchableOpacity onPress={() => setShowUserTransactionsOnly(true)} style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                                            <Ionicons name={showUserTransactionsOnly ? 'radio-button-on' : 'radio-button-off'} size={18} color={showUserTransactionsOnly ? '#8b5cf6' : '#9ca3af'} />
+                                                            <Text style={[styles.switchLabel, { marginLeft: 6 }]}>My Transactions</Text>
+                                                        </TouchableOpacity>
+                                                        <TouchableOpacity onPress={() => setShowUserTransactionsOnly(false)} style={{ flexDirection: 'row', alignItems: 'center', marginLeft: 14 }}>
+                                                            <Ionicons name={!showUserTransactionsOnly ? 'radio-button-on' : 'radio-button-off'} size={18} color={!showUserTransactionsOnly ? '#8b5cf6' : '#9ca3af'} />
+                                                            <Text style={[styles.switchLabel, { marginLeft: 6 }]}>All Transactions</Text>
+                                                        </TouchableOpacity>
+                                                    </View>
+                                                </View>
+                                            )}
+                                        </View>
+
+                                        {/* Group Dropdown List */}
+                                        {showGroupDropdown && (
+                                            <View style={styles.groupDropdownList}>
+                                                <ScrollView
+                                                    style={styles.groupDropdownScrollView}
+                                                    showsVerticalScrollIndicator={true}
+                                                    nestedScrollEnabled={true}
+                                                >
+                                                    <TouchableOpacity
+                                                        style={[
+                                                            styles.groupDropdownItem,
+                                                            !selectedGroup && styles.groupDropdownItemSelected
+                                                        ]}
+                                                        onPress={() => {
+                                                            setSelectedGroup(null);
+                                                            setShowGroupDropdown(false);
+                                                        }}
+                                                    >
+                                                        <Text style={[
+                                                            styles.groupDropdownItemText,
+                                                            !selectedGroup && styles.groupDropdownItemTextSelected
+                                                        ]}>
+                                                            All Groups
+                                                        </Text>
+                                                    </TouchableOpacity>
+                                                    {groups.length > 0 ? (
+                                                        groups.map((group) => (
+                                                            <TouchableOpacity
+                                                                key={group._id}
+                                                                style={[
+                                                                    styles.groupDropdownItem,
+                                                                    selectedGroup?._id === group._id && styles.groupDropdownItemSelected
+                                                                ]}
+                                                                onPress={() => {
+                                                                    setSelectedGroup(group);
+                                                                    setShowGroupDropdown(false);
+                                                                }}
+                                                            >
+                                                                <Text style={[
+                                                                    styles.groupDropdownItemText,
+                                                                    selectedGroup?._id === group._id && styles.groupDropdownItemTextSelected
+                                                                ]}>
+                                                                    {group.name}
+                                                                </Text>
+                                                            </TouchableOpacity>
+                                                        ))
+                                                    ) : (
+                                                        <View style={styles.groupDropdownItem}>
+                                                            <Text style={[styles.groupDropdownItemText, { color: '#9ca3af', fontStyle: 'italic' }]}>
+                                                                No groups found
+                                                            </Text>
+                                                        </View>
+                                                    )}
+                                                </ScrollView>
+                                            </View>
+                                        )}
+                                    </View>
+                                )}
+                                {filteredTransactions.map(item => (
+                                    <View key={item._id}>
+                                        {renderItem({ item })}
+                                    </View>
+                                ))}
+                            </ScrollView>
+                        )}
                     </View>
                 ) : (
                     <View style={styles.tableWrapper}>
@@ -898,62 +1212,7 @@ const AllViewTrans = () => {
                         </ScrollView>
                     </View>
                 )}
-                {/* Filter Modal */}
-                <Modal
-                    visible={filterModalVisible}
-                    transparent
-                    animationType="slide"
-                    onRequestClose={() => setFilterModalVisible(false)}
-                >
-                    <View style={styles.modalOverlay}>
-                        <View style={styles.modalContent}>
-                            <Text style={styles.modalTitle}>Filter Transactions</Text>
-                            <Text style={styles.modalLabel}>Transaction Type</Text>
-                            <View style={styles.pickerWrapper}>
-                                <Picker
-                                    selectedValue={filterType}
-                                    onValueChange={setFilterType}
-                                    style={styles.picker}
-                                >
-                                    <Picker.Item label="All Types" value="All Types" />
-                                    <Picker.Item label="Income" value="Income" />
-                                    <Picker.Item label="Expense" value="Expense" />
-                                </Picker>
-                            </View>
-                            <Text style={styles.modalLabel}>Category</Text>
-                            <View style={styles.pickerWrapper}>
-                                <Picker
-                                    selectedValue={filterCategory}
-                                    onValueChange={setFilterCategory}
-                                    style={styles.picker}
-                                >
-                                    <Picker.Item label="All Categories" value="All Categories" />
-                                    {Array.from(new Set(transactions.map(t => t.category).filter(Boolean))).map(cat => (
-                                        <Picker.Item label={cat} value={cat} key={cat} />
-                                    ))}
-                                </Picker>
-                            </View>
-                            <View style={styles.modalBtnRow}>
-                                <TouchableOpacity
-                                    style={styles.clearBtn}
-                                    onPress={() => {
-                                        setFilterType('All Types');
-                                        setFilterCategory('All Categories');
-                                        setFilterModalVisible(false);
-                                    }}
-                                >
-                                    <Text style={styles.clearBtnText}>Clear All</Text>
-                                </TouchableOpacity>
-                                <TouchableOpacity
-                                    style={styles.applyBtn}
-                                    onPress={() => setFilterModalVisible(false)}
-                                >
-                                    <Text style={styles.applyBtnText}>Apply Filters</Text>
-                                </TouchableOpacity>
-                            </View>
-                        </View>
-                    </View>
-                </Modal>
+
                 {/* Transaction Details Modal */}
                 <Modal
                     visible={modalVisible}
@@ -1243,11 +1502,11 @@ const styles = StyleSheet.create({
     },
     filterRow: {
         flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
         marginBottom: 16,
         marginTop: 8,
         paddingHorizontal: 16,
-        flexWrap: 'wrap',
-        gap: 8,
     },
     filterBtn: {
         paddingHorizontal: 12,
@@ -1261,6 +1520,20 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.05,
         shadowRadius: 2,
         elevation: 1,
+    },
+    filterIconChip: {
+        paddingHorizontal: 10,
+        paddingVertical: 6,
+        borderRadius: 16,
+        backgroundColor: '#f1f5f9',
+        borderWidth: 1,
+        borderColor: '#e2e8f0',
+        shadowColor: '#8b5cf6',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.05,
+        shadowRadius: 2,
+        elevation: 1,
+        marginLeft: 8,
     },
     filterBtnActive: {
         backgroundColor: '#8b5cf6',
@@ -1775,6 +2048,120 @@ const styles = StyleSheet.create({
         color: '#fff',
         fontSize: 16,
         fontWeight: '600',
+    },
+    // Group Selection Styles
+    groupSelectionContainer: {
+        marginTop: 8,
+        marginBottom: 16,
+        marginHorizontal: 16,
+        backgroundColor: '#ffffff',
+        borderRadius: 16,
+        padding: 6,
+        shadowColor: '#8b5cf6',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.1,
+        shadowRadius: 8,
+        elevation: 4,
+    },
+    groupDropdownRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        flexWrap: 'wrap',
+        gap: 12,
+    },
+    groupDropdownContainer: {
+        flex: 1,
+        minWidth: 200,
+    },
+    groupDropdownLabel: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: '#1f2937',
+        marginBottom: 8,
+    },
+    groupDropdownButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        backgroundColor: '#f8fafc',
+        borderRadius: 12,
+        padding: 12,
+        borderWidth: 1,
+        borderColor: '#e5e7eb',
+    },
+    groupDropdownText: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: '#1f2937',
+        flex: 1,
+    },
+    groupBadge: {
+        marginLeft: 8,
+        backgroundColor: '#f3e8ff',
+        borderRadius: 10,
+        paddingHorizontal: 8,
+        paddingVertical: 2,
+        borderWidth: 1,
+        borderColor: '#e9d5ff',
+    },
+    groupBadgeText: {
+        color: '#8b5cf6',
+        fontSize: 12,
+        fontWeight: '700',
+    },
+    groupDropdownList: {
+        marginTop: 12,
+        backgroundColor: '#ffffff',
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: '#e5e7eb',
+        shadowColor: '#8b5cf6',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        elevation: 2,
+        maxHeight: 200,
+    },
+    groupDropdownScrollView: {
+        maxHeight: 200,
+    },
+    groupDropdownItem: {
+        padding: 12,
+        borderBottomWidth: 1,
+        borderBottomColor: '#f3f4f6',
+    },
+    groupDropdownItemSelected: {
+        backgroundColor: '#f0f9ff',
+    },
+    groupDropdownItemText: {
+        fontSize: 16,
+        fontWeight: '500',
+        color: '#1f2937',
+    },
+    groupDropdownItemTextSelected: {
+        color: '#8b5cf6',
+        fontWeight: '700',
+    },
+    transactionFilterContainer: {
+        alignItems: 'center',
+        minWidth: 200,
+    },
+    transactionFilterLabel: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: '#1f2937',
+        marginBottom: 8,
+    },
+    switchContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+    },
+    switchLabel: {
+        fontSize: 12,
+        fontWeight: '500',
+        color: '#6b7280',
     },
 });
 

@@ -176,8 +176,8 @@ const ContactTran = () => {
     }, []);
 
     const validateForm = useCallback(() => {
-        if (!formData.description.trim()) {
-            Alert.alert("Error", "Please enter a description");
+        if (!formData.title.trim()) {
+            Alert.alert("Error", "Please enter a title");
             return false;
         }
         if (!formData.amount || isNaN(parseFloat(formData.amount)) || parseFloat(formData.amount) <= 0) {
@@ -189,7 +189,7 @@ const ContactTran = () => {
             return false;
         }
         return true;
-    }, [formData, selectedBankAccount]);
+    }, [formData, selectedBankAccount, contact]);
 
     const handlePayment = useCallback(async () => {
         if (!validateForm()) return;
@@ -211,6 +211,8 @@ const ContactTran = () => {
                 title: 'Processing Transaction',
                 subtitle: 'Please wait while we process your transaction...',
                 amount: parseFloat(formData.amount),
+                title: formData.title,
+                description: formData.description,
                 category: formData.category,
                 bankAccount: selectedBankAccount?.bankName,
                 contactName: contact?.name,
@@ -251,7 +253,8 @@ const ContactTran = () => {
                     }] : [];
 
                     const requestData = {
-                        title: formData.description,
+                        title: formData.title,
+                        description: formData.description,
                         description: formData.notes,
                         amount: parseFloat(formData.amount),
                         category: formData.category,
@@ -299,6 +302,8 @@ const ContactTran = () => {
                                 : 'Transaction created successfully!',
                             amount: parseFloat(formData.amount),
                             transactionId: response.data.data?._id || 'TXN' + Date.now(),
+                            title: formData.title,
+                            description: formData.description,
                             category: formData.category,
                             bankAccount: selectedBankAccount?.bankName,
                             contactName: contact?.name,
@@ -314,6 +319,8 @@ const ContactTran = () => {
                         title: 'Transaction Failed',
                         subtitle: error.response?.data?.message || "Failed to process transaction. Please try again.",
                         amount: parseFloat(formData.amount),
+                        title: formData.title,
+                        description: formData.description,
                         category: formData.category,
                         bankAccount: selectedBankAccount?.bankName,
                         contactName: contact?.name,
@@ -347,101 +354,75 @@ const ContactTran = () => {
         }
     }, []);
 
-    const renderContactHeader = () => (
-        <View style={styles.contactHeader}>
-            <View style={styles.contactContent}>
-                {contact.imageAvailable && contact.image ? (
-                    <Image source={{ uri: contact.image.uri }} style={styles.contactImage} />
-                ) : (
-                    <View style={styles.contactImagePlaceholder}>
-                        <Text style={styles.contactInitial}>
-                            {contact.name ? contact.name.charAt(0).toUpperCase() : '?'}
-                        </Text>
-                    </View>
-                )}
-
-                <View style={styles.contactInfo}>
-                    <View style={styles.contactNameRow}>
-                        <Text style={styles.contactName} numberOfLines={1}>
-                            {contact.name || 'Unknown Contact'}
-                        </Text>
-                        <View style={styles.contactStatus}>
-                            <View style={styles.statusDot} />
-                            <Text style={styles.statusText}>Active</Text>
-                        </View>
-                    </View>
-                    <Text style={styles.contactPhone}>
-                        {contact.phoneNumbers?.[0]?.number || 'No phone number'}
-                    </Text>
-                </View>
-
-                <View style={styles.contactActions}>
-                    <TouchableOpacity style={styles.callButton}>
-                        <Ionicons name="call" size={20} color="#8b5cf6" />
-                    </TouchableOpacity>
-                    <TouchableOpacity style={styles.messageButton}>
-                        <Ionicons name="chatbubble" size={20} color="#8b5cf6" />
-                    </TouchableOpacity>
-                </View>
-            </View>
-        </View>
-    );
-
     return (
         <SafeAreaView style={styles.container}>
             <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
 
             {/* Enhanced Header with Gradient */}
-            <LinearGradient
-                colors={['#ffffff', '#f8fafc']}
-                style={styles.headerGradient}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-            >
-                <View style={styles.header}>
-                    <TouchableOpacity
-                        style={styles.backButton}
-                        onPress={() => navigation.goBack()}
-                    >
-                        <Ionicons name="chevron-back" size={24} color="#8b5cf6" />
-                    </TouchableOpacity>
-                    <View style={styles.headerContent}>
-                        <View style={styles.headerIconContainer}>
-                            <Ionicons name="person" size={20} color="#8b5cf6" />
+            <View style={styles.header}>
+                <TouchableOpacity
+                    style={styles.backButton}
+                    onPress={() => navigation.goBack()}
+                >
+                    <Ionicons name="chevron-back" size={24} color="#8b5cf6" />
+                </TouchableOpacity>
+                <View style={styles.headerContent}>
+                    {contact.imageAvailable && contact.image ? (
+                        <Image source={{ uri: contact.image.uri }} style={styles.headerContactImage} />
+                    ) : (
+                        <View style={styles.headerContactImagePlaceholder}>
+                            <Text style={styles.headerContactInitial}>
+                                {contact.name ? contact.name.charAt(0).toUpperCase() : 'C'}
+                            </Text>
                         </View>
-                        <Text style={styles.headerTitle}>Send Money</Text>
+                    )}
+                    <View style={styles.headerTextContainer}>
+                        <Text style={styles.headerTitle}>{contact.name || 'Contact'}</Text>
                         <Text style={styles.headerSubtitle}>
-                            {contact.name || 'Contact'}
+                            {contact.phoneNumbers && contact.phoneNumbers.length > 0
+                                ? contact.phoneNumbers[0].number
+                                : 'No phone number'}
                         </Text>
                     </View>
-                    <TouchableOpacity style={styles.menuButton}>
-                        <Ionicons name="ellipsis-vertical" size={24} color="#8b5cf6" />
-                    </TouchableOpacity>
                 </View>
-            </LinearGradient>
+                <TouchableOpacity
+                    style={styles.callButton}
+                    onPress={() => {
+                        if (contact.phoneNumbers && contact.phoneNumbers.length > 0) {
+                            const phoneNumber = contact.phoneNumbers[0].number;
+                            Linking.openURL(`tel:${phoneNumber}`);
+                        } else {
+                            Alert.alert("No Phone Number", "This contact doesn't have a phone number");
+                        }
+                    }}
+                >
+                    <Ionicons name="call" size={24} color="#8b5cf6" />
+                </TouchableOpacity>
+            </View>
 
             <KeyboardAvoidingView
                 style={{ flex: 1 }}
                 behavior={Platform.OS === "ios" ? "padding" : undefined}
             >
-                <ScrollView contentContainerStyle={styles.content}>
-                    {renderContactHeader()}
+                <ScrollView
+                    contentContainerStyle={{ paddingBottom: 32, paddingHorizontal: 16 }}
+                >
 
-                    <View style={styles.section}>
-                        <Text style={styles.label}>Description*</Text>
-                        <TextInput
-                            style={styles.input}
-                            placeholder="What's this transaction for?"
-                            value={formData.description}
-                            onChangeText={(text) => handleInputChange('description', text)}
-                            editable={isEditing}
-                        />
-                    </View>
 
-                    <View style={styles.section}>
-                        <Text style={styles.label}>Amount (₹)*</Text>
+                    <Text style={styles.label}>Title*</Text>
+                    <TextInput
+                        style={styles.input}
+                        placeholder="What's this transaction title?"
+                        value={formData.title}
+                        onChangeText={(text) => handleInputChange('title', text)}
+                        editable={isEditing}
+                    />
+
+                    <Text style={styles.label}>Amount*</Text>
+                    <View style={styles.amountRow}>
+                        <Text style={styles.amountPrefix}>₹</Text>
                         <TextInput
-                            style={styles.input}
+                            style={styles.amountInput}
                             placeholder="0.00"
                             keyboardType="numeric"
                             value={formData.amount.toString()}
@@ -451,58 +432,51 @@ const ContactTran = () => {
                             editable={isEditing}
                         />
                     </View>
+                    <Text style={styles.label}>Description*</Text>
+                    <TextInput
+                        style={styles.input}
+                        placeholder="What's this transaction description?"
+                        value={formData.description}
+                        onChangeText={(text) => handleInputChange('description', text)}
+                        editable={isEditing}
+                    />
 
-                    <View style={styles.section}>
-                        <Text style={styles.label}>Category</Text>
-                        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                            {categories.map((cat) => (
-                                <TouchableOpacity
-                                    key={cat.key}
-                                    style={[
-                                        styles.categoryButton,
-                                        formData.category === cat.key && styles.selectedCategory,
-                                    ]}
-                                    onPress={() => handleInputChange('category', cat.key)}
-                                    disabled={!isEditing}
-                                >
-                                    <View style={styles.categoryContent}>
-                                        {cat.icon}
-                                        <Text
-                                            style={[
-                                                styles.categoryText,
-                                                formData.category === cat.key && styles.selectedCategoryText,
-                                            ]}
-                                        >
-                                            {cat.label}
-                                        </Text>
-                                    </View>
-                                </TouchableOpacity>
-                            ))}
-                        </ScrollView>
+                    <Text style={styles.label}>Category</Text>
+                    <View style={styles.categoryGrid}>
+                        {categories.map((cat) => (
+                            <TouchableOpacity
+                                key={cat.key}
+                                style={[
+                                    styles.categoryBtn,
+                                    formData.category === cat.key && styles.categoryBtnActive,
+                                ]}
+                                onPress={() => handleInputChange('category', cat.key)}
+                                disabled={!isEditing}
+                            >
+                                {cat.icon}
+                                <Text style={styles.categoryText} numberOfLines={1}>{cat.label}</Text>
+                            </TouchableOpacity>
+                        ))}
                     </View>
-                    <View style={styles.section}>
-                        <Text style={styles.label}>Tags (Optional)</Text>
-                        <TextInput
-                            style={styles.input}
-                            placeholder="Comma separated tags (e.g., urgent, work, personal)"
-                            value={formData.tags}
-                            onChangeText={(text) => handleInputChange('tags', text)}
-                            editable={isEditing}
-                        />
-                    </View>
+                    <Text style={styles.label}>Tags (comma-separated)</Text>
+                    <TextInput
+                        style={styles.input}
+                        placeholder="E.g., urgent, work, personal"
+                        value={formData.tags}
+                        onChangeText={(text) => handleInputChange('tags', text)}
+                        editable={isEditing}
+                    />
 
-                    <View style={styles.section}>
-                        <Text style={styles.label}>Notes (Optional)</Text>
-                        <TextInput
-                            style={[styles.input, styles.notesInput]}
-                            placeholder="Add any additional notes..."
-                            value={formData.notes}
-                            onChangeText={(text) => handleInputChange('notes', text)}
-                            multiline
-                            numberOfLines={3}
-                            editable={isEditing}
-                        />
-                    </View>
+                    <Text style={styles.label}>Notes</Text>
+                    <TextInput
+                        style={styles.textarea}
+                        placeholder="Add any additional notes"
+                        value={formData.notes}
+                        onChangeText={(text) => handleInputChange('notes', text)}
+                        multiline
+                        numberOfLines={2}
+                        editable={isEditing}
+                    />
 
                     {bankAccounts.length === 0 ? (
                         <View style={styles.section}>
@@ -537,7 +511,7 @@ const ContactTran = () => {
                                             <Ionicons
                                                 name={selectedBankAccount.accountType === 'savings' ? 'cash-outline' : 'card-outline'}
                                                 size={24}
-                                                color="#009CF9"
+                                                color="#8b5cf6"
                                             />
                                             <View style={styles.bankDetails}>
                                                 <Text style={styles.bankName}>{selectedBankAccount.bankName}</Text>
@@ -551,7 +525,7 @@ const ContactTran = () => {
                                 ) : (
                                     <Text style={styles.placeholderText}>Select a bank account</Text>
                                 )}
-                                <Ionicons name="chevron-down" size={24} color="#888" />
+                                <Ionicons name="chevron-down" size={20} color="#8b5cf6" />
                             </TouchableOpacity>
                             {showErrors && errors.bankAccount && (
                                 <Text style={styles.errorText}>{errors.bankAccount}</Text>
@@ -620,20 +594,18 @@ const ContactTran = () => {
                         <View style={styles.paymentAppsContainer}>
                             <Text style={styles.sectionTitle}>Payment Options</Text>
                             <View style={styles.paymentAppsGrid}>
-                                {Object.entries(PAYMENT_APPS).map(([appName, app]) => (
-                                    <TouchableOpacity
-                                        key={appName}
-                                        style={[
-                                            styles.paymentAppButton,
-                                            { backgroundColor: app.color },
-                                            selectedPaymentApp === appName && styles.selectedPaymentApp
-                                        ]}
-                                        onPress={() => setSelectedPaymentApp(appName)}
-                                    >
-                                        <Ionicons name={app.icon} size={24} color="#fff" />
-                                        <Text style={styles.paymentAppText}>{appName}</Text>
-                                    </TouchableOpacity>
-                                ))}
+                                <TouchableOpacity style={[styles.quickBtn, { borderColor: '#1a73e8' }]} onPress={() => openPaymentApp('GPay')}>
+                                    <Ionicons name="logo-google" size={16} color="#1a73e8" />
+                                    <Text style={[styles.quickBtnText, { color: '#1a73e8' }]}>Open GPay</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity style={[styles.quickBtn, { borderColor: '#673ab7' }]} onPress={() => openPaymentApp('PhonePe')}>
+                                    <Ionicons name="phone-portrait-outline" size={16} color="#673ab7" />
+                                    <Text style={[styles.quickBtnText, { color: '#673ab7' }]}>Open PhonePe</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity style={[styles.quickBtn, { borderColor: '#00baf2' }]} onPress={() => openPaymentApp('Paytm')}>
+                                    <Ionicons name="wallet-outline" size={16} color="#00baf2" />
+                                    <Text style={[styles.quickBtnText, { color: '#00baf2' }]}>Open Paytm</Text>
+                                </TouchableOpacity>
                             </View>
                         </View>
                     )}
@@ -641,9 +613,8 @@ const ContactTran = () => {
                     {isEditing && (
                         <TouchableOpacity
                             style={[
-                                styles.payButton,
-                                loading && styles.loadingButton,
-                                selectedPaymentApp && styles.selectedPayButton
+                                styles.saveBtn,
+                                loading && styles.loadingButton
                             ]}
                             onPress={handlePayment}
                             disabled={loading}
@@ -651,7 +622,7 @@ const ContactTran = () => {
                             {loading ? (
                                 <ActivityIndicator color="#fff" />
                             ) : (
-                                <Text style={styles.payButtonText}>
+                                <Text style={styles.saveBtnText}>
                                     {transactionDetails._id ? "Update Transaction" : "Complete Transaction"}
                                 </Text>
                             )}
@@ -673,6 +644,8 @@ const ContactTran = () => {
                 amount={resultData.amount}
                 transactionId={resultData.transactionId}
                 bankAccount={resultData.bankAccount}
+                title={resultData.title}
+                description={resultData.description}
                 category={resultData.category}
                 groupName={resultData.groupName}
                 contactName={resultData.contactName}
@@ -736,6 +709,9 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
     },
+    headerTextContainer: {
+        flex: 1,
+    },
     headerIconContainer: {
         width: 40,
         height: 40,
@@ -751,6 +727,31 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.1,
         shadowRadius: 4,
         elevation: 2,
+    },
+    headerContactImage: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        marginRight: 12,
+        borderWidth: 2,
+        borderColor: '#8b5cf6',
+    },
+    headerContactImagePlaceholder: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        backgroundColor: '#8b5cf6',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: 12,
+        borderWidth: 2,
+        borderColor: '#e5e7eb',
+    },
+    headerContactInitial: {
+        fontSize: 16,
+        fontWeight: '800',
+        color: '#ffffff',
+        letterSpacing: 0.5,
     },
     headerTitle: {
         fontSize: 22,
@@ -774,6 +775,18 @@ const styles = StyleSheet.create({
         alignSelf: 'flex-start',
     },
     menuButton: {
+        padding: 12,
+        backgroundColor: '#f8fafc',
+        borderRadius: 16,
+        shadowColor: '#8b5cf6',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.15,
+        shadowRadius: 8,
+        elevation: 4,
+        borderWidth: 1,
+        borderColor: '#e2e8f0',
+    },
+    callButton: {
         padding: 12,
         backgroundColor: '#f8fafc',
         borderRadius: 16,
@@ -922,50 +935,117 @@ const styles = StyleSheet.create({
         marginBottom: 20,
     },
     label: {
-        fontWeight: '600',
-        fontSize: 14,
-        marginTop: 10,
-        marginBottom: 4,
-        color: '#333',
+        fontWeight: '700',
+        fontSize: 16,
+        marginTop: 8,
+        marginBottom: 8,
+        color: '#1f2937',
+        letterSpacing: 0.5,
     },
     input: {
-        backgroundColor: '#f8f9fa',
-        borderRadius: 6,
+        backgroundColor: '#ffffff',
+        borderRadius: 16,
         borderWidth: 1,
-        borderColor: '#e9ecef',
-        padding: 10,
-        fontSize: 15,
-        marginBottom: 4,
+        borderColor: '#e5e7eb',
+        padding: 16,
+        fontSize: 16,
+        marginBottom: 8,
+        shadowColor: '#8b5cf6',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.1,
+        shadowRadius: 8,
+        elevation: 4,
+        borderLeftWidth: 3,
+        borderLeftColor: '#8b5cf6',
+        color: '#1f2937',
+        fontWeight: '600',
     },
-    notesInput: {
-        minHeight: 80,
-        textAlignVertical: 'top',
-    },
-    categoryButton: {
-        paddingVertical: 8,
-        paddingHorizontal: 15,
-        borderRadius: 20,
-        backgroundColor: '#f8f9fa',
-        marginRight: 10,
-        borderWidth: 1,
-        borderColor: '#e9ecef',
-    },
-    categoryContent: {
+    amountRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        justifyContent: 'center',
+        backgroundColor: '#ffffff',
+        borderRadius: 16,
+        borderWidth: 1,
+        borderColor: '#e5e7eb',
+        paddingHorizontal: 16,
+        marginBottom: 8,
+        shadowColor: '#8b5cf6',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.1,
+        shadowRadius: 8,
+        elevation: 4,
+        borderLeftWidth: 3,
+        borderLeftColor: '#8b5cf6',
     },
-    selectedCategory: {
-        backgroundColor: '#007bff',
-        borderColor: '#007bff',
+    amountPrefix: {
+        fontSize: 18,
+        color: '#8b5cf6',
+        marginRight: 8,
+        fontWeight: '700',
+    },
+    amountInput: {
+        flex: 1,
+        fontSize: 18,
+        paddingVertical: 12,
+        color: '#1f2937',
+        fontWeight: '700',
+        letterSpacing: 0.5,
+    },
+    textarea: {
+        backgroundColor: '#ffffff',
+        borderRadius: 16,
+        borderWidth: 1,
+        borderColor: '#e5e7eb',
+        padding: 16,
+        fontSize: 16,
+        minHeight: 80,
+        textAlignVertical: 'top',
+        color: '#1f2937',
+        shadowColor: '#8b5cf6',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.1,
+        shadowRadius: 8,
+        elevation: 4,
+        borderLeftWidth: 3,
+        borderLeftColor: '#8b5cf6',
+        fontWeight: '600',
+    },
+    categoryGrid: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        marginBottom: 12,
+        gap: 8,
+    },
+    categoryBtn: {
+        width: '23%',
+        backgroundColor: '#ffffff',
+        borderRadius: 16,
+        alignItems: 'center',
+        paddingVertical: 12,
+        borderWidth: 1,
+        borderColor: '#e5e7eb',
+        shadowColor: '#8b5cf6',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.1,
+        shadowRadius: 8,
+        elevation: 4,
+    },
+    categoryBtnActive: {
+        borderColor: '#8b5cf6',
+        backgroundColor: '#f3f4f6',
+        shadowColor: '#8b5cf6',
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.2,
+        shadowRadius: 12,
+        elevation: 6,
     },
     categoryText: {
-        color: '#495057',
-        fontSize: 14,
-        marginLeft: 6,
-    },
-    selectedCategoryText: {
-        color: '#fff',
+        fontSize: 12,
+        color: '#1f2937',
+        marginTop: 6,
+        textAlign: 'center',
+        fontWeight: '700',
+        letterSpacing: 0.3,
     },
     typeButton: {
         paddingVertical: 8,
@@ -1066,7 +1146,7 @@ const styles = StyleSheet.create({
         fontWeight: '600',
     },
     errorText: {
-        color: '#FF3B30',
+        color: '#ef4444',
         fontSize: 12,
         marginTop: 4,
         marginBottom: 8,
@@ -1096,15 +1176,22 @@ const styles = StyleSheet.create({
         backgroundColor: '#FF3B30',
     },
     bankAccountSelector: {
-        backgroundColor: '#f8f9fa',
-        borderRadius: 6,
+        backgroundColor: '#fff',
+        borderRadius: 16,
         borderWidth: 1,
-        borderColor: '#e9ecef',
-        padding: 10,
-        marginBottom: 12,
+        borderColor: '#e5e7eb',
+        padding: 18,
+        marginTop: 4,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
+        shadowColor: '#8b5cf6',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.08,
+        shadowRadius: 12,
+        elevation: 3,
+        borderLeftWidth: 4,
+        borderLeftColor: '#8b5cf6',
     },
     selectedBankAccount: {
         flex: 1,
@@ -1114,65 +1201,88 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     bankDetails: {
-        marginLeft: 10,
+        marginLeft: 12,
     },
     bankName: {
-        fontSize: 14,
+        fontSize: 15,
         fontWeight: '600',
-        color: '#333',
+        color: '#1f2937',
     },
     accountType: {
-        fontSize: 12,
-        color: '#666',
+        fontSize: 13,
+        color: '#6b7280',
         marginTop: 2,
+        fontWeight: '500',
     },
     balance: {
-        fontSize: 14,
-        fontWeight: '600',
-        color: '#007AFF',
+        fontSize: 15,
+        fontWeight: '700',
+        color: '#8b5cf6',
         marginTop: 4,
     },
     placeholderText: {
-        color: '#666',
-        fontSize: 14,
+        color: '#9ca3af',
+        fontSize: 16,
+        fontWeight: '500',
     },
     modalOverlay: {
         flex: 1,
-        backgroundColor: 'rgba(0,0,0,0.4)',
-        justifyContent: 'flex-end',
+        backgroundColor: 'rgba(0,0,0,0.6)',
+        justifyContent: 'center',
+        alignItems: 'center',
     },
     modalContent: {
         backgroundColor: '#fff',
-        borderTopLeftRadius: 16,
-        borderTopRightRadius: 16,
-        maxHeight: '75%',
+        borderRadius: 24,
+        width: '90%',
+        maxHeight: '80%',
+        shadowColor: '#8b5cf6',
+        shadowOffset: {
+            width: 0,
+            height: 8,
+        },
+        shadowOpacity: 0.15,
+        shadowRadius: 16,
+        elevation: 8,
     },
     modalHeader: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        padding: 14,
+        padding: 20,
         borderBottomWidth: 1,
-        borderBottomColor: '#e9ecef',
+        borderBottomColor: '#e5e7eb',
     },
     modalTitle: {
-        fontSize: 16,
-        fontWeight: '600',
-        color: '#333',
+        fontSize: 20,
+        fontWeight: '700',
+        color: '#1f2937',
     },
     bankAccountsList: {
         padding: 14,
     },
     bankAccountItem: {
-        backgroundColor: '#f8f9fa',
-        borderRadius: 8,
-        padding: 12,
-        marginBottom: 10,
+        backgroundColor: '#f8fafc',
+        borderRadius: 16,
+        padding: 16,
+        marginBottom: 12,
+        borderWidth: 1,
+        borderColor: '#e5e7eb',
+        shadowColor: '#8b5cf6',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 8,
+        elevation: 1,
     },
     selectedBankAccountItem: {
-        borderColor: '#007AFF',
-        borderWidth: 1.5,
-        backgroundColor: '#e6f2ff',
+        borderColor: '#8b5cf6',
+        borderWidth: 2,
+        backgroundColor: '#f3e8ff',
+        shadowColor: '#8b5cf6',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.15,
+        shadowRadius: 12,
+        elevation: 3,
     },
     accountRight: {
         alignItems: 'flex-end',
@@ -1223,6 +1333,57 @@ const styles = StyleSheet.create({
         color: '#fff',
         fontSize: 14,
         fontWeight: '600',
+    },
+    // New styles to match SplitTransactions.js
+    paymentAppsContainer: {
+        marginTop: 16,
+        marginBottom: 16,
+    },
+    sectionTitle: {
+        fontSize: 16,
+        fontWeight: '700',
+        marginBottom: 10,
+        color: '#0f172a',
+    },
+    paymentAppsGrid: {
+        flexDirection: 'row',
+        justifyContent: 'flex-start',
+        flexWrap: 'wrap',
+        gap: 8,
+    },
+    quickBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        paddingVertical: 8,
+        paddingHorizontal: 12,
+        borderRadius: 20,
+        borderWidth: 1.5,
+        backgroundColor: '#fff',
+    },
+    quickBtnText: {
+        fontWeight: '700',
+    },
+    saveBtn: {
+        backgroundColor: '#8b5cf6',
+        borderRadius: 16,
+        paddingVertical: 18,
+        paddingHorizontal: 24,
+        alignItems: 'center',
+        marginTop: 24,
+        shadowColor: '#8b5cf6',
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.3,
+        shadowRadius: 12,
+        elevation: 8,
+    },
+    saveBtnText: {
+        color: '#ffffff',
+        fontWeight: '700',
+        fontSize: 18,
+    },
+    loadingButton: {
+        backgroundColor: '#9ca3af',
     },
 });
 
