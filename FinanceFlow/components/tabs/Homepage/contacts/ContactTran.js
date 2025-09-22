@@ -49,9 +49,10 @@ const ContactTran = () => {
     const navigation = useNavigation();
     const route = useRoute();
 
-    const { contact = {}, transactionDetails = {}, sentamount = 0, groupId: routeGroupId, description = "" } = route.params || {};
+    const { contact = {}, transactionDetails = {}, sentamount = 0, groupId: routeGroupId, description = "", title = "" } = route.params || {};
 
     const [formData, setFormData] = useState({
+        title: title || transactionDetails?.title || "",
         description: description || transactionDetails?.description || "",
         amount: sentamount || transactionDetails?.amount || "",
         category: transactionDetails?.category || "Other",
