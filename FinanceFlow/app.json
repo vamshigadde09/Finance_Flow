@@ -1,8 +1,9 @@
 {
   "expo": {
-    "name": "FinanceFlow",
+    "name": "Finance Flow",
     "slug": "FinanceFlow",
     "version": "1.0.0",
+    "icon": "./assets/images/icon.png",
     "orientation": "portrait",
     "scheme": "financeflow",
     "userInterfaceStyle": "automatic",
@@ -10,16 +11,18 @@
     "sdkVersion": "54.0.0",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.vamshi_gadde_9.FinanceFlow",
+      "bundleIdentifier": "com.vamshigadde.FinanceFlow",
       "buildNumber": "1",
       "infoPlist": {
         "NSCameraUsageDescription": "This app needs access to camera to take photos for transactions.",
         "NSContactsUsageDescription": "This app needs access to contacts to help you manage transactions with your contacts.",
-        "NSPhotoLibraryUsageDescription": "This app needs access to photo library to select images for transactions."
+        "NSPhotoLibraryUsageDescription": "This app needs access to photo library to select images for transactions.",
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
       "adaptiveIcon": {
+        "foregroundImage": "./assets/images/icon-with-name.png",
         "backgroundColor": "#ffffff"
       },
       "permissions": [
