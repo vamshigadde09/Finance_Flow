@@ -7,6 +7,8 @@ import { useNavigation, useIsFocused } from '@react-navigation/native';
 import * as Contacts from 'expo-contacts';
 import axios from 'axios';
 import Colors from '../../constants/Colors';
+import { initializeNotifications } from '../../utils/notifications';
+import Constants from 'expo-constants';
 
 import { API_BASE_URL } from '../../api';
 
@@ -144,6 +146,12 @@ const Profile = () => {
         }
     }, [isFocused, userData]);
 
+    useEffect(() => {
+        const isExpoGo = Constants.appOwnership === 'expo';
+        if (!isExpoGo) {
+            initializeNotifications();
+        }
+    }, []);
     return (
         <SafeAreaView style={styles.safeContainer}>
             <View style={styles.container}>

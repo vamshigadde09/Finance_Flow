@@ -5,6 +5,8 @@ const User = require("../models/userModel");
 const Transaction = require("../models/Transaction");
 const Template = require("../models/Template");
 const BankBalance = require("../models/BankBalance");
+const { Expo } = require('expo-server-sdk');
+const expo = new Expo();
 
 //create group
 const createGroup = async (req, res) => {
@@ -1307,6 +1309,31 @@ const updateSettlementStatus = async (req, res) => {
             }
 
             await transaction.save();
+
+            // Send push notification to the receiver (payer) that a settlement is awaiting confirmation
+            try {
+                let receiverUser = null;
+                if (transaction.paidBy && String(transaction.paidBy._id) === String(currentUserId)) {
+                    // current user paid; receiver is the other user
+                    receiverUser = await User.findById(userId).select('expoPushToken firstName');
+                } else {
+                    // other user paid; receiver is current user
+                    receiverUser = await User.findById(currentUserId).select('expoPushToken firstName');
+                }
+                if (receiverUser && receiverUser.expoPushToken && Expo.isExpoPushToken(receiverUser.expoPushToken)) {
+                    await expo.sendPushNotificationsAsync([
+                        {
+                            to: receiverUser.expoPushToken,
+                            sound: 'default',
+                            title: 'Settlement received',
+                            body: `A payment is awaiting your confirmation in ${groupExists?.name || 'group'}`,
+                            data: { type: 'settlement_confirm_required', groupId },
+                        },
+                    ]);
+                }
+            } catch (e) {
+                console.warn('Push notify (paid) failed:', e?.message);
+            }
         }
 
 
@@ -1598,6 +1625,24 @@ const confirmSettlement = async (req, res) => {
                     status: settlement.status
                 });
             }
+        }
+
+        // Notify payer about result (confirmed or rejected)
+        try {
+            const targetUser = await User.findById(userId).select('expoPushToken firstName');
+            if (targetUser && targetUser.expoPushToken && Expo.isExpoPushToken(targetUser.expoPushToken)) {
+                await expo.sendPushNotificationsAsync([
+                    {
+                        to: targetUser.expoPushToken,
+                        sound: 'default',
+                        title: confirmed ? 'Payment confirmed' : 'Payment rejected',
+                        body: confirmed ? 'Your payment has been confirmed' : 'Your payment was rejected',
+                        data: { type: confirmed ? 'settlement_confirmed' : 'settlement_rejected', groupId },
+                    },
+                ]);
+            }
+        } catch (e) {
+            console.warn('Push notify (confirm) failed:', e?.message);
         }
 
 

@@ -8,6 +8,7 @@ const {
   updateUser,
   deleteUser,
   completeUserGuide,
+  setPushToken,
 } = require("../controllers/userController");
 const authMiddleware = require("../middleware/authMiddleware");
 
@@ -21,5 +22,6 @@ router.get("/user", authMiddleware, getCurrentUser);
 router.put("/update", authMiddleware, updateUser);
 router.delete("/delete", authMiddleware, deleteUser);
 router.put("/complete-user-guide", authMiddleware, completeUserGuide);
+router.post("/push-token", authMiddleware, setPushToken);
 
 module.exports = router;

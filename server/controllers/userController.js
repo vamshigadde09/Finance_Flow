@@ -325,6 +325,27 @@ const completeUserGuide = async (req, res) => {
   }
 };
 
+// Store Expo push token for the authenticated user
+const setPushToken = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const { expoPushToken } = req.body;
+    if (!expoPushToken) {
+      return res.status(400).json({ success: false, message: 'expoPushToken is required' });
+    }
+
+    const user = await User.findById(userId);
+    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+
+    user.expoPushToken = expoPushToken;
+    await user.save();
+
+    res.status(200).json({ success: true, message: 'Push token saved' });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Failed to save push token', error: error.message });
+  }
+};
+
 module.exports = {
   registerUser,
   loginUser,
@@ -333,4 +354,5 @@ module.exports = {
   updateUser,
   deleteUser,
   completeUserGuide,
+  setPushToken,
 };

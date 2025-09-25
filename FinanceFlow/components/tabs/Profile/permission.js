@@ -36,11 +36,11 @@ try {
 //     console.log('expo-location not available');
 // }
 
-// try {
-//     Notifications = require('expo-notifications');
-// } catch (e) {
-//     console.log('expo-notifications not available');
-// }
+try {
+    Notifications = require('expo-notifications');
+} catch (e) {
+    console.log('expo-notifications not available');
+}
 
 try {
     FileSystem = require('expo-file-system');
@@ -95,14 +95,14 @@ const Permission = ({ navigation }) => {
         //     color: '#ef4444',
         //     required: false
         // },
-        // {
-        //     key: 'notifications',
-        //     title: 'Push Notifications',
-        //     description: 'Receive reminders for bill payments and transaction updates',
-        //     icon: 'notifications-outline',
-        //     color: '#3b82f6',
-        //     required: false
-        // },
+        {
+            key: 'notifications',
+            title: 'Push Notifications',
+            description: 'Receive reminders for bill payments and transaction updates',
+            icon: 'notifications-outline',
+            color: '#3b82f6',
+            required: false
+        },
         // {
         //     key: 'storage',
         //     title: 'Storage Access',

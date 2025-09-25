@@ -37,8 +37,16 @@ import TransExport from './components/tabs/Stats/TransExport';
 import permission from './components/tabs/Profile/permission';
 import { UserGuide } from './components/Guide';
 import { checkUserGuideStatus } from './components/Guide/GuideUtils';
-
+import { initializeNotifications } from './utils/notifications';
+import Constants from 'expo-constants';
 const Stack = createNativeStackNavigator();
+
+// Filter noisy expo-notifications warning (SDK 53+ in Expo Go)
+const originalWarn = console.warn;
+console.warn = (...args) => {
+    if (typeof args[0] === 'string' && args[0].includes('expo-notifications')) return;
+    originalWarn(...args);
+};
 
 const ProtectedScreen = (ScreenComponent) => {
     return (props) => (
@@ -66,6 +74,13 @@ export default function App() {
             try {
                 const token = await AsyncStorage.getItem('token');
                 if (token) {
+                    // Attach token to subsequent fetches for push token registration
+                    global.__AUTH_TOKEN__ = token;
+                    // Register push token as soon as auth token is available (not in Expo Go)
+                    const isExpoGo = Constants.appOwnership === 'expo';
+                    if (!isExpoGo) {
+                        try { await initializeNotifications(); } catch { }
+                    }
                     // Check if user guide has been completed
                     const guideCompleted = await checkUserGuideStatus();
                     if (!guideCompleted) {

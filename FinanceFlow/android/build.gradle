@@ -1,6 +1,16 @@
 // Top-level build file where you can add configuration options common to all sub-projects/modules.
 
 buildscript {
+ext {
+    googlePlayServicesVersion = "+" // default: "+"
+    firebaseMessagingVersion = "21.1.0" // default: "21.1.0"
+
+    // Other settings
+    compileSdkVersion = 35 // default: 23
+    buildToolsVersion = "35.0.0" // default: "23.0.1"
+    targetSdkVersion = 35 // default: 23
+    supportLibVersion = "23.1.1" // default: 23.1.1
+}
   repositories {
     google()
     mavenCentral()

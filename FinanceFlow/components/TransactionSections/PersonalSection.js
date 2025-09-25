@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Modal, Image, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Modal, Image, Alert, ActivityIndicator, Linking, Platform } from 'react-native';
 import { Ionicons, MaterialIcons, FontAwesome5 } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -7,6 +7,40 @@ import axios from 'axios';
 
 
 import { API_BASE_URL } from '../../api';
+
+const openWithFallback = async (schemeUrl, storeId) => {
+    try {
+        const can = await Linking.canOpenURL(schemeUrl);
+        if (can) {
+            await Linking.openURL(schemeUrl);
+            return;
+        }
+    } catch (_e) { }
+    const storeUrl = Platform.OS === 'android'
+        ? `https://play.google.com/store/apps/details?id=${storeId}`
+        : 'https://apps.apple.com';
+    Linking.openURL(storeUrl);
+};
+
+const PAYMENT_APPS = {
+    GPay: { scheme: 'tez://upi/pay', pkg: 'com.google.android.apps.nbu.paisa.user' },
+    PhonePe: { scheme: 'phonepe://upi/pay', pkg: 'com.phonepe.app' },
+    Paytm: { scheme: 'paytmmp://upi/pay', pkg: 'net.one97.paytm' },
+};
+
+const openPaymentApp = async (appName) => {
+    const appConfig = PAYMENT_APPS[appName];
+    if (!appConfig) {
+        Alert.alert('Error', `Payment app "${appName}" not configured.`);
+        return;
+    }
+    try {
+        await openWithFallback(appConfig.scheme, appConfig.pkg);
+    } catch (error) {
+        console.error(`Error opening ${appName}:`, error);
+        Alert.alert('Error', `Failed to open ${appName}. Please try again or install the app.`);
+    }
+};
 
 const categories = [
     { key: 'Housing', icon: <FontAwesome5 name="home" size={22} color="#6b7280" />, label: 'Housing' },
@@ -386,6 +420,25 @@ const PersonalSection = ({
                         </TouchableOpacity>
                     </>
                 )}
+
+                {/* Payment Apps */}
+                <View style={styles.paymentAppsContainer}>
+                    <Text style={styles.sectionTitle}>Payment Options</Text>
+                    <View style={styles.paymentAppsGrid}>
+                        <TouchableOpacity style={[styles.quickBtn, { borderColor: '#1a73e8' }]} onPress={() => openPaymentApp('GPay')}>
+                            <Ionicons name="logo-google" size={16} color="#1a73e8" />
+                            <Text style={[styles.quickBtnText, { color: '#1a73e8' }]}>Open GPay</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity style={[styles.quickBtn, { borderColor: '#673ab7' }]} onPress={() => openPaymentApp('PhonePe')}>
+                            <Ionicons name="phone-portrait-outline" size={16} color="#673ab7" />
+                            <Text style={[styles.quickBtnText, { color: '#673ab7' }]}>Open PhonePe</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity style={[styles.quickBtn, { borderColor: '#00baf2' }]} onPress={() => openPaymentApp('Paytm')}>
+                            <Ionicons name="wallet-outline" size={16} color="#00baf2" />
+                            <Text style={[styles.quickBtnText, { color: '#00baf2' }]}>Open Paytm</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
                 {/* Recurring Transaction Section */}
                 <View style={styles.section}>
                     <View style={styles.recurringHeader}>
@@ -773,6 +826,34 @@ const styles = StyleSheet.create({
         color: '#fff',
         fontSize: 15,
         fontWeight: '600',
+    },
+    paymentAppsContainer: {
+        marginTop: 8,
+    },
+    sectionTitle: {
+        fontSize: 15,
+        fontWeight: '700',
+        marginBottom: 10,
+        color: '#0f172a',
+    },
+    paymentAppsGrid: {
+        flexDirection: 'row',
+        justifyContent: 'flex-start',
+        flexWrap: 'wrap',
+        gap: 8,
+    },
+    quickBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        paddingVertical: 8,
+        paddingHorizontal: 12,
+        borderRadius: 20,
+        borderWidth: 1.5,
+        backgroundColor: '#fff',
+    },
+    quickBtnText: {
+        fontWeight: '700',
     },
     modalOverlay: {
         flex: 1,
