@@ -1,4 +1,4 @@
 git add -A
-git commit -m "testing notification"
+git commit -m "testing notification part-2"
 git push -u origin notification
 git push

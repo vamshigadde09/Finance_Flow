@@ -1,5 +1,5 @@
 import { Platform } from 'react-native';
-import { API_BASE_URL } from '../api';
+import Constants from 'expo-constants';
 
 let NotificationsModule = null;
 async function getNotifications() {
@@ -48,23 +48,6 @@ export async function initializeNotifications() {
         const ask = await Notifications.requestPermissionsAsync();
         status = ask.status;
     }
-    try {
-        const tokenResp = await Notifications.getExpoPushTokenAsync();
-        const expoPushToken = tokenResp?.data;
-        if (expoPushToken) {
-            // Persist to backend
-            await fetch(`${API_BASE_URL}/api/v1/user/push-token`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    ...(global.__AUTH_TOKEN__ ? { 'Authorization': `Bearer ${global.__AUTH_TOKEN__}` } : {})
-                },
-                body: JSON.stringify({ expoPushToken })
-            }).catch(() => { });
-        }
-    } catch (e) {
-        // Ignore in Expo Go / token failures
-    }
     return status === 'granted';
 }
 
@@ -91,4 +74,29 @@ export async function sendLocalNotification(title, body, data = {}, channelId = 
         },
         trigger: null,
     });
+}
+
+export async function registerPushToken(apiBaseUrl, authToken) {
+    try {
+        // Ensure permissions are granted and channels are ready
+        await initializeNotifications();
+        const Notifications = await getNotifications();
+        const projectId = Constants?.expoConfig?.extra?.eas?.projectId || Constants?.easConfig?.projectId;
+        const tokenResponse = await Notifications.getExpoPushTokenAsync({ projectId });
+        const pushToken = tokenResponse?.data;
+        if (!pushToken) return false;
+
+        await fetch(`${apiBaseUrl}/api/v1/users/save-push-token`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${authToken}`,
+            },
+            body: JSON.stringify({ token: pushToken }),
+        });
+        return true;
+    } catch (e) {
+        console.warn('Failed to register push token:', e?.message || e);
+        return false;
+    }
 }

@@ -5,8 +5,6 @@ const User = require("../models/userModel");
 const Transaction = require("../models/Transaction");
 const Template = require("../models/Template");
 const BankBalance = require("../models/BankBalance");
-const { Expo } = require('expo-server-sdk');
-const expo = new Expo();
 
 //create group
 const createGroup = async (req, res) => {
@@ -1309,25 +1307,6 @@ const updateSettlementStatus = async (req, res) => {
             }
 
             await transaction.save();
-
-            // Send push notification to the receiver (original payer) that a settlement is awaiting confirmation
-            try {
-                const receiverId = transaction?.paidBy?._id || transaction?.paidBy; // original payer always confirms
-                const receiverUser = receiverId ? await User.findById(receiverId).select('expoPushToken firstName') : null;
-                if (receiverUser && receiverUser.expoPushToken && Expo.isExpoPushToken(receiverUser.expoPushToken)) {
-                    await expo.sendPushNotificationsAsync([
-                        {
-                            to: receiverUser.expoPushToken,
-                            sound: 'default',
-                            title: 'Settlement received',
-                            body: `A payment is awaiting your confirmation in ${groupExists?.name || 'group'}`,
-                            data: { type: 'settlement_confirm_required', groupId },
-                        },
-                    ]);
-                }
-            } catch (e) {
-                console.warn('Push notify (paid) failed:', e?.message);
-            }
         }
 
 
@@ -1619,24 +1598,6 @@ const confirmSettlement = async (req, res) => {
                     status: settlement.status
                 });
             }
-        }
-
-        // Notify payer about result (confirmed or rejected)
-        try {
-            const targetUser = await User.findById(userId).select('expoPushToken firstName');
-            if (targetUser && targetUser.expoPushToken && Expo.isExpoPushToken(targetUser.expoPushToken)) {
-                await expo.sendPushNotificationsAsync([
-                    {
-                        to: targetUser.expoPushToken,
-                        sound: 'default',
-                        title: confirmed ? 'Payment confirmed' : 'Payment rejected',
-                        body: confirmed ? 'Your payment has been confirmed' : 'Your payment was rejected',
-                        data: { type: confirmed ? 'settlement_confirmed' : 'settlement_rejected', groupId },
-                    },
-                ]);
-            }
-        } catch (e) {
-            console.warn('Push notify (confirm) failed:', e?.message);
         }
 
 

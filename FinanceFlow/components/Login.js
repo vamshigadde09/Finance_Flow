@@ -8,6 +8,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import { checkUserGuideStatus, markUserGuideCompleted } from './Guide/GuideUtils';
 import { API_BASE_URL } from '../api';
+import { registerPushToken } from '../utils/notifications';
 
 // Create axios instance with interceptor
 const api = axios.create({
@@ -201,6 +202,13 @@ const Login = () => {
             // Log user data and token
             console.log('User Data:', response.data.user);
             console.log('Token:', response.data.token);
+
+            // Register for push notifications and save token server-side
+            try {
+                await registerPushToken(API_BASE_URL, response.data.token);
+            } catch (e) {
+                console.warn('Push token registration failed:', e?.message || e);
+            }
 
             // Show welcome message with animation
             showWelcomeMessage();

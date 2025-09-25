@@ -37,8 +37,8 @@ import TransExport from './components/tabs/Stats/TransExport';
 import permission from './components/tabs/Profile/permission';
 import { UserGuide } from './components/Guide';
 import { checkUserGuideStatus } from './components/Guide/GuideUtils';
-import { initializeNotifications } from './utils/notifications';
-import Constants from 'expo-constants';
+import { registerPushToken } from './utils/notifications';
+import { API_BASE_URL } from './api';
 const Stack = createNativeStackNavigator();
 
 // Filter noisy expo-notifications warning (SDK 53+ in Expo Go)
@@ -74,12 +74,10 @@ export default function App() {
             try {
                 const token = await AsyncStorage.getItem('token');
                 if (token) {
-                    // Attach token to subsequent fetches for push token registration
-                    global.__AUTH_TOKEN__ = token;
-                    // Register push token as soon as auth token is available (not in Expo Go)
-                    const isExpoGo = Constants.appOwnership === 'expo';
-                    if (!isExpoGo) {
-                        try { await initializeNotifications(); } catch { }
+                    try {
+                        await registerPushToken(API_BASE_URL, token);
+                    } catch (e) {
+                        console.warn('registerPushToken on app start failed:', e?.message || e);
                     }
                     // Check if user guide has been completed
                     const guideCompleted = await checkUserGuideStatus();

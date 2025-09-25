@@ -52,6 +52,8 @@ const userSchema = new mongoose.Schema(
     },
     expoPushToken: {
       type: String,
+      default: null,
+      index: true,
     },
   },
   {
