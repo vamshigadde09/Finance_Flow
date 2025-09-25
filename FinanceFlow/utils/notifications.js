@@ -53,7 +53,7 @@ export async function initializeNotifications() {
         const expoPushToken = tokenResp?.data;
         if (expoPushToken) {
             // Persist to backend
-            await fetch(`${API_BASE_URL}/api/v1/users/push-token`, {
+            await fetch(`${API_BASE_URL}/api/v1/user/push-token`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
