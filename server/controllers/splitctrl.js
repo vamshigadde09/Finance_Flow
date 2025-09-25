@@ -1310,16 +1310,10 @@ const updateSettlementStatus = async (req, res) => {
 
             await transaction.save();
 
-            // Send push notification to the receiver (payer) that a settlement is awaiting confirmation
+            // Send push notification to the receiver (original payer) that a settlement is awaiting confirmation
             try {
-                let receiverUser = null;
-                if (transaction.paidBy && String(transaction.paidBy._id) === String(currentUserId)) {
-                    // current user paid; receiver is the other user
-                    receiverUser = await User.findById(userId).select('expoPushToken firstName');
-                } else {
-                    // other user paid; receiver is current user
-                    receiverUser = await User.findById(currentUserId).select('expoPushToken firstName');
-                }
+                const receiverId = transaction?.paidBy?._id || transaction?.paidBy; // original payer always confirms
+                const receiverUser = receiverId ? await User.findById(receiverId).select('expoPushToken firstName') : null;
                 if (receiverUser && receiverUser.expoPushToken && Expo.isExpoPushToken(receiverUser.expoPushToken)) {
                     await expo.sendPushNotificationsAsync([
                         {
