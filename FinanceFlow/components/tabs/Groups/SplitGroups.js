@@ -8,9 +8,6 @@ import axios from 'axios';
 import { io } from 'socket.io-client';
 import { useAnimatedProps, useSharedValue, withTiming, useAnimatedStyle, withSpring } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
-import Constants from 'expo-constants';
-import { initializeNotifications, sendLocalNotification } from '../../../utils/notifications';
-import { useRef } from 'react';
 import * as Contacts from 'expo-contacts';
 
 import { API_BASE_URL } from '../../../api';
@@ -401,43 +398,6 @@ const SplitGroups = () => {
     const [memberBalances, setMemberBalances] = useState({});
 
     const [settlementStatuses, setSettlementStatuses] = useState({});
-
-    // Notify on settlement status changes (incoming confirmations or waiting state)
-    const prevPendingToConfirmRef = useRef(0);
-
-    useEffect(() => {
-        const isExpoGo = Constants.appOwnership === 'expo';
-        if (!isExpoGo) {
-            initializeNotifications();
-        }
-    }, []);
-
-    useEffect(() => {
-        if (!currentUserId || !groupData?._id) return;
-        const statusesForUser = settlementStatuses[currentUserId] || {};
-        const paid = Array.isArray(statusesForUser.paidSettlements) ? statusesForUser.paidSettlements : [];
-        const rejected = Array.isArray(statusesForUser.rejectedSettlements) ? statusesForUser.rejectedSettlements : [];
-
-        // 1) Payments awaiting YOUR confirmation (others paid you; you are original payer)
-        const pendingToConfirm = paid.filter(s => String(s.group) === String(groupData._id)
-            && s.status === 'paid'
-            && String(s.paidBy?._id) === String(currentUserId)
-            && String(s.user?._id) !== String(currentUserId));
-
-        const pendingCount = pendingToConfirm.length;
-
-        // Notify only the confirmer for pending confirmations (Settlement received)
-        if (pendingCount > prevPendingToConfirmRef.current) {
-            const delta = pendingCount - prevPendingToConfirmRef.current;
-            sendLocalNotification(
-                'Settlement received',
-                `${delta} payment${delta > 1 ? 's' : ''} awaiting your confirmation in ${groupData?.name || 'group'}`,
-                { type: 'settlement_confirm_required', groupId: groupData?._id }
-            );
-        }
-
-        prevPendingToConfirmRef.current = pendingCount;
-    }, [settlementStatuses, currentUserId, groupData?._id]);
     const [socket, setSocket] = useState(null);
     const [settlementConfirmation, setSettlementConfirmation] = useState({
         visible: false,

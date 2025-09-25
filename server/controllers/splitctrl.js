@@ -1,3 +1,28 @@
+// Push notifications helper using Expo
+const { Expo } = require('expo-server-sdk');
+const expo = new Expo();
+
+async function sendPushToUser(userId, title, body, data = {}) {
+    try {
+        const user = await User.findById(userId).select('expoPushToken');
+        if (!user || !user.expoPushToken || !Expo.isExpoPushToken(user.expoPushToken)) {
+            return;
+        }
+        const messages = [{
+            to: user.expoPushToken,
+            sound: 'default',
+            title,
+            body,
+            data,
+        }];
+        const chunks = expo.chunkPushNotifications(messages);
+        for (const chunk of chunks) {
+            await expo.sendPushNotificationsAsync(chunk);
+        }
+    } catch (e) {
+        console.error('[Push] sendPushToUser error:', e?.message || e);
+    }
+}
 const express = require("express");
 const mongoose = require("mongoose");
 const Group = require("../models/Group");
@@ -1307,6 +1332,23 @@ const updateSettlementStatus = async (req, res) => {
             }
 
             await transaction.save();
+
+            // Server push: notify original payer that a settlement is awaiting confirmation
+            try {
+                const originalPayerId = transaction.paidBy._id || transaction.paidBy;
+                // Count how many newly marked 'paid' for this txn
+                const newlyPaidCount = settlementsToUpdate.length;
+                if (newlyPaidCount > 0) {
+                    await sendPushToUser(
+                        originalPayerId,
+                        'Settlement received',
+                        `${newlyPaidCount} payment${newlyPaidCount > 1 ? 's are' : ' is'} awaiting your confirmation.`,
+                        { type: 'settlement_confirm_required', transactionId: String(transaction._id), groupId: String(transaction.group) }
+                    );
+                }
+            } catch (e) {
+                console.error('[Push] updateSettlementStatus push error:', e?.message || e);
+            }
         }
 
 
@@ -1591,6 +1633,28 @@ const confirmSettlement = async (req, res) => {
 
 
                 await transaction.save();
+
+                // Server push notifications
+                try {
+                    const payerUserId = settlement.user?._id || settlement.user; // the one who paid
+                    if (confirmed) {
+                        await sendPushToUser(
+                            payerUserId,
+                            'Payment confirmed',
+                            `Your payment of ₹${Number(settlement.amount).toFixed(2)} was confirmed.`,
+                            { type: 'settlement_confirmed', transactionId: String(transaction._id), groupId: String(transaction.group) }
+                        );
+                    } else {
+                        await sendPushToUser(
+                            payerUserId,
+                            'Payment rejected',
+                            `Your payment of ₹${Number(settlement.amount).toFixed(2)} was rejected.`,
+                            { type: 'settlement_rejected', transactionId: String(transaction._id), groupId: String(transaction.group) }
+                        );
+                    }
+                } catch (e) {
+                    console.error('[Push] confirmSettlement push error:', e?.message || e);
+                }
                 updatedTransactions.push({
                     transactionId: transaction._id,
                     amount: settlement.amount,

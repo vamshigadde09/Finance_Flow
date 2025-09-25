@@ -78,15 +78,23 @@ export async function sendLocalNotification(title, body, data = {}, channelId = 
 
 export async function registerPushToken(apiBaseUrl, authToken) {
     try {
+        console.log('[Push][client] registerPushToken start');
         // Ensure permissions are granted and channels are ready
         await initializeNotifications();
         const Notifications = await getNotifications();
         const projectId = Constants?.expoConfig?.extra?.eas?.projectId || Constants?.easConfig?.projectId;
+        if (!projectId) {
+            console.warn('[Push][client] Missing projectId in Constants');
+        }
         const tokenResponse = await Notifications.getExpoPushTokenAsync({ projectId });
         const pushToken = tokenResponse?.data;
-        if (!pushToken) return false;
+        if (!pushToken) {
+            console.warn('[Push][client] No push token returned');
+            return false;
+        }
+        console.log('[Push][client] got token', `${pushToken.slice(0, 12)}...`);
 
-        await fetch(`${apiBaseUrl}/api/v1/users/save-push-token`, {
+        const res = await fetch(`${apiBaseUrl}/api/v1/user/save-push-token`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -94,6 +102,7 @@ export async function registerPushToken(apiBaseUrl, authToken) {
             },
             body: JSON.stringify({ token: pushToken }),
         });
+        console.log('[Push][client] save-push-token response', res.status);
         return true;
     } catch (e) {
         console.warn('Failed to register push token:', e?.message || e);
