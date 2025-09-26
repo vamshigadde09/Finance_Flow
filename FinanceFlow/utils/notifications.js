@@ -1,16 +1,8 @@
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
-
-let NotificationsModule = null;
-async function getNotifications() {
-    if (!NotificationsModule) {
-        NotificationsModule = await import('expo-notifications');
-    }
-    return NotificationsModule;
-}
+import * as Notifications from 'expo-notifications';
 
 export async function initializeNotifications() {
-    const Notifications = await getNotifications();
 
     Notifications.setNotificationHandler({
         handleNotification: async () => ({
@@ -52,7 +44,6 @@ export async function initializeNotifications() {
 }
 
 export async function sendTestNotification() {
-    const Notifications = await getNotifications();
     await Notifications.scheduleNotificationAsync({
         content: {
             title: 'FinanceFlow Test',
@@ -64,7 +55,6 @@ export async function sendTestNotification() {
 }
 
 export async function sendLocalNotification(title, body, data = {}, channelId = 'settlements') {
-    const Notifications = await getNotifications();
     await Notifications.scheduleNotificationAsync({
         content: {
             title,
@@ -81,15 +71,25 @@ export async function registerPushToken(apiBaseUrl, authToken) {
         console.log('[Push][client] registerPushToken start');
         console.log('[Push][client] API Base URL:', apiBaseUrl);
         console.log('[Push][client] Auth token preview:', authToken ? `${authToken.substring(0, 20)}...` : 'null');
+        console.log('[Push][client] Notifications module available:', !!Notifications);
         console.log('[Push][client] Constants:', JSON.stringify({
             appOwnership: Constants.appOwnership,
             expoConfig: Constants.expoConfig ? 'present' : 'missing',
             easConfig: Constants.easConfig ? 'present' : 'missing'
         }, null, 2));
 
+        // Test if Notifications module is working
+        try {
+            console.log('[Push][client] Testing Notifications module...');
+            const permissions = await Notifications.getPermissionsAsync();
+            console.log('[Push][client] Current permissions:', permissions);
+        } catch (e) {
+            console.warn('[Push][client] Notifications module test failed:', e?.message || e);
+            return false;
+        }
+
         // Ensure permissions are granted and channels are ready
         await initializeNotifications();
-        const Notifications = await getNotifications();
 
         // Try multiple ways to get projectId
         let projectId = Constants?.expoConfig?.extra?.eas?.projectId ||
@@ -111,12 +111,12 @@ export async function registerPushToken(apiBaseUrl, authToken) {
             } catch (e) {
                 console.warn('[Push][client] Failed to get token without projectId:', e?.message || e);
             }
-            
+
             // Try with hardcoded projectId from app.json as last resort
             console.warn('[Push][client] Trying with hardcoded projectId as fallback');
             try {
-                const tokenResponse = await Notifications.getExpoPushTokenAsync({ 
-                    projectId: 'cd92af63-a800-41c9-b6ac-87010cdd129d' 
+                const tokenResponse = await Notifications.getExpoPushTokenAsync({
+                    projectId: 'cd92af63-a800-41c9-b6ac-87010cdd129d'
                 });
                 const pushToken = tokenResponse?.data;
                 if (pushToken) {
@@ -126,7 +126,7 @@ export async function registerPushToken(apiBaseUrl, authToken) {
             } catch (e) {
                 console.warn('[Push][client] Failed to get token with hardcoded projectId:', e?.message || e);
             }
-            
+
             return false;
         }
 
