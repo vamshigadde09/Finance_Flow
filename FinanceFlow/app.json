@@ -27,6 +27,7 @@
         "backgroundColor": "#ffffff"
       },
       "permissions": [
+        "android.permission.POST_NOTIFICATIONS",
         "android.permission.READ_CONTACTS",
         "android.permission.READ_PHONE_NUMBERS",
         "android.permission.WRITE_CONTACTS"
@@ -45,7 +46,8 @@
         {
           "contactsPermission": "Allow FinanceFlow to access your contacts."
         }
-      ]
+      ],
+      "expo-notifications"
     ],
     "experiments": {
       "typedRoutes": true
