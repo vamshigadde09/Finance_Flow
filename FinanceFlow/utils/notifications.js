@@ -79,6 +79,8 @@ export async function sendLocalNotification(title, body, data = {}, channelId = 
 export async function registerPushToken(apiBaseUrl, authToken) {
     try {
         console.log('[Push][client] registerPushToken start');
+        console.log('[Push][client] API Base URL:', apiBaseUrl);
+        console.log('[Push][client] Auth token preview:', authToken ? `${authToken.substring(0, 20)}...` : 'null');
         console.log('[Push][client] Constants:', JSON.stringify({
             appOwnership: Constants.appOwnership,
             expoConfig: Constants.expoConfig ? 'present' : 'missing',
@@ -109,6 +111,22 @@ export async function registerPushToken(apiBaseUrl, authToken) {
             } catch (e) {
                 console.warn('[Push][client] Failed to get token without projectId:', e?.message || e);
             }
+            
+            // Try with hardcoded projectId from app.json as last resort
+            console.warn('[Push][client] Trying with hardcoded projectId as fallback');
+            try {
+                const tokenResponse = await Notifications.getExpoPushTokenAsync({ 
+                    projectId: 'cd92af63-a800-41c9-b6ac-87010cdd129d' 
+                });
+                const pushToken = tokenResponse?.data;
+                if (pushToken) {
+                    console.log('[Push][client] got token with hardcoded projectId', `${pushToken.slice(0, 12)}...`);
+                    return await saveTokenToServer(apiBaseUrl, authToken, pushToken);
+                }
+            } catch (e) {
+                console.warn('[Push][client] Failed to get token with hardcoded projectId:', e?.message || e);
+            }
+            
             return false;
         }
 

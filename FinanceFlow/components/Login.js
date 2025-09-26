@@ -204,8 +204,10 @@ const Login = () => {
             console.log('Token:', response.data.token);
 
             // Register for push notifications and save token server-side
+            console.log('[Login] Starting push token registration...');
             try {
                 const success = await registerPushToken(API_BASE_URL, response.data.token);
+                console.log('[Login] Push token registration result:', success);
                 if (!success) {
                     console.warn('Push token registration failed, will retry on app start');
                 }
