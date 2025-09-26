@@ -131,7 +131,7 @@ async function saveTokenToServer(apiBaseUrl, authToken, pushToken) {
     try {
         console.log('[Push][client] Attempting to save token to:', `${apiBaseUrl}/api/v1/user/save-push-token`);
         console.log('[Push][client] Auth token preview:', authToken ? `${authToken.substring(0, 20)}...` : 'null');
-        
+
         const res = await fetch(`${apiBaseUrl}/api/v1/user/save-push-token`, {
             method: 'POST',
             headers: {
@@ -140,16 +140,16 @@ async function saveTokenToServer(apiBaseUrl, authToken, pushToken) {
             },
             body: JSON.stringify({ token: pushToken }),
         });
-        
+
         console.log('[Push][client] save-push-token response status:', res.status);
         console.log('[Push][client] response headers:', Object.fromEntries(res.headers.entries()));
-        
+
         if (!res.ok) {
             const errorText = await res.text();
             console.warn('[Push][client] Server error response:', errorText);
             return false;
         }
-        
+
         const responseData = await res.text();
         console.log('[Push][client] Server response:', responseData);
         return true;

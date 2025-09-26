@@ -155,6 +155,12 @@ const loginUser = async (req, res) => {
       user: userData,
       token: token
     });
+    if (success) {
+      console.log('Login successful');
+    }
+    else {
+      console.log('Login failed');
+    }
   } catch (err) {
     console.error("Login error:", err);
     res.status(500).json({
