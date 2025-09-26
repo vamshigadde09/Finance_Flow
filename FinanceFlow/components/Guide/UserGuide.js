@@ -208,7 +208,11 @@ const UserGuide = ({ navigation }) => {
                         </View>
                     </ScrollView>
                 ) : (
-                    <View style={[styles.content, styles.contentContainer]}>
+                    <ScrollView
+                        style={styles.content}
+                        contentContainerStyle={styles.contentContainer}
+                        showsVerticalScrollIndicator={true}
+                    >
                         {/* Icon */}
                         <View style={styles.iconContainer}>
                             <View style={styles.iconWrapper}>
@@ -236,7 +240,7 @@ const UserGuide = ({ navigation }) => {
                                 </View>
                             ))}
                         </View>
-                    </View>
+                    </ScrollView>
                 )}
 
                 {/* Navigation */}

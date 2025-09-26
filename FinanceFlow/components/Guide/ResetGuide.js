@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Alert, ScrollView } from 'react-native';
 import { resetUserGuide } from './GuideUtils';
 
 const ResetGuide = () => {
@@ -13,11 +13,11 @@ const ResetGuide = () => {
     };
 
     return (
-        <View style={styles.container}>
+        <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={true}>
             <TouchableOpacity style={styles.button} onPress={handleReset}>
                 <Text style={styles.buttonText}>Reset User Guide</Text>
             </TouchableOpacity>
-        </View>
+        </ScrollView>
     );
 };
 
