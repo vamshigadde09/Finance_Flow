@@ -37,7 +37,6 @@ import TransExport from './components/tabs/Stats/TransExport';
 import permission from './components/tabs/Profile/permission';
 import { UserGuide } from './components/Guide';
 import { checkUserGuideStatus } from './components/Guide/GuideUtils';
-import { registerPushToken } from './utils/notifications';
 import { API_BASE_URL } from './api';
 const Stack = createNativeStackNavigator();
 
