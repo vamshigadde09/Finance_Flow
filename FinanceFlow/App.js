@@ -75,7 +75,10 @@ export default function App() {
                 const token = await AsyncStorage.getItem('token');
                 if (token) {
                     try {
-                        await registerPushToken(API_BASE_URL, token);
+                        const success = await registerPushToken(API_BASE_URL, token);
+                        if (!success) {
+                            console.warn('registerPushToken on app start failed, will retry later');
+                        }
                     } catch (e) {
                         console.warn('registerPushToken on app start failed:', e?.message || e);
                     }

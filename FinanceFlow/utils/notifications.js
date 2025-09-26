@@ -79,13 +79,39 @@ export async function sendLocalNotification(title, body, data = {}, channelId = 
 export async function registerPushToken(apiBaseUrl, authToken) {
     try {
         console.log('[Push][client] registerPushToken start');
+        console.log('[Push][client] Constants:', JSON.stringify({
+            appOwnership: Constants.appOwnership,
+            expoConfig: Constants.expoConfig ? 'present' : 'missing',
+            easConfig: Constants.easConfig ? 'present' : 'missing'
+        }, null, 2));
+
         // Ensure permissions are granted and channels are ready
         await initializeNotifications();
         const Notifications = await getNotifications();
-        const projectId = Constants?.expoConfig?.extra?.eas?.projectId || Constants?.easConfig?.projectId;
+
+        // Try multiple ways to get projectId
+        let projectId = Constants?.expoConfig?.extra?.eas?.projectId ||
+            Constants?.easConfig?.projectId ||
+            Constants?.expoConfig?.extra?.projectId;
+
+        console.log('[Push][client] projectId:', projectId);
+
         if (!projectId) {
-            console.warn('[Push][client] Missing projectId in Constants');
+            console.warn('[Push][client] Missing projectId in Constants, trying without it');
+            // Try without projectId - sometimes it works in production builds
+            try {
+                const tokenResponse = await Notifications.getExpoPushTokenAsync();
+                const pushToken = tokenResponse?.data;
+                if (pushToken) {
+                    console.log('[Push][client] got token without projectId', `${pushToken.slice(0, 12)}...`);
+                    return await saveTokenToServer(apiBaseUrl, authToken, pushToken);
+                }
+            } catch (e) {
+                console.warn('[Push][client] Failed to get token without projectId:', e?.message || e);
+            }
+            return false;
         }
+
         const tokenResponse = await Notifications.getExpoPushTokenAsync({ projectId });
         const pushToken = tokenResponse?.data;
         if (!pushToken) {
@@ -94,6 +120,15 @@ export async function registerPushToken(apiBaseUrl, authToken) {
         }
         console.log('[Push][client] got token', `${pushToken.slice(0, 12)}...`);
 
+        return await saveTokenToServer(apiBaseUrl, authToken, pushToken);
+    } catch (e) {
+        console.warn('Failed to register push token:', e?.message || e);
+        return false;
+    }
+}
+
+async function saveTokenToServer(apiBaseUrl, authToken, pushToken) {
+    try {
         const res = await fetch(`${apiBaseUrl}/api/v1/user/save-push-token`, {
             method: 'POST',
             headers: {
@@ -102,10 +137,18 @@ export async function registerPushToken(apiBaseUrl, authToken) {
             },
             body: JSON.stringify({ token: pushToken }),
         });
+
         console.log('[Push][client] save-push-token response', res.status);
+
+        if (!res.ok) {
+            const errorText = await res.text();
+            console.warn('[Push][client] Server error:', errorText);
+            return false;
+        }
+
         return true;
     } catch (e) {
-        console.warn('Failed to register push token:', e?.message || e);
+        console.warn('[Push][client] Network error saving token:', e?.message || e);
         return false;
     }
 }

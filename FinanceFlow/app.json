@@ -3,7 +3,7 @@
     "name": "Finance Flow",
     "slug": "FinanceFlow",
     "version": "1.0.0",
-    "icon": "./assets/images/icon.png",
+    "icon": "./assets/images/icon.jpg",
     "orientation": "portrait",
     "scheme": "financeflow",
     "userInterfaceStyle": "automatic",
@@ -21,9 +21,9 @@
       }
     },
     "android": {
-      "icon": "./assets/images/icon.png",
+      "icon": "./assets/images/icon.jpg",
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/icon.png",
+        "foregroundImage": "./assets/images/icon.jpg",
         "backgroundColor": "#ffffff"
       },
       "permissions": [
