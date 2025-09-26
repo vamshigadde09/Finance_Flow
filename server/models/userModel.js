@@ -50,11 +50,6 @@ const userSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
-    expoPushToken: {
-      type: String,
-      default: null,
-      index: true,
-    },
   },
   {
     timestamps: true,

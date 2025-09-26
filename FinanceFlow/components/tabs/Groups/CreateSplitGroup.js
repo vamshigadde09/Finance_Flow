@@ -350,17 +350,7 @@ const CreateSplitGroup = () => {
                         },
                     }
                 );
-
-                if (response.data.success) {
-                    Alert.alert("Success", "Group created successfully!", [
-                        {
-                            text: "OK",
-                            onPress: () => navigation.goBack()
-                        }
-                    ]);
-                } else {
-                    throw new Error(response.data.message || "Failed to create group");
-                }
+                navigation.goBack()
             }
         } catch (error) {
             console.error("Error:", error);

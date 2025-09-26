@@ -75,15 +75,6 @@ export default function App() {
                 const token = await AsyncStorage.getItem('token');
                 if (token) {
                     console.log('[App] Found existing token, attempting push token registration...');
-                    try {
-                        const success = await registerPushToken(API_BASE_URL, token);
-                        console.log('[App] Push token registration result:', success);
-                        if (!success) {
-                            console.warn('registerPushToken on app start failed, will retry later');
-                        }
-                    } catch (e) {
-                        console.warn('registerPushToken on app start failed:', e?.message || e);
-                    }
                     // Check if user guide has been completed
                     const guideCompleted = await checkUserGuideStatus();
                     if (!guideCompleted) {

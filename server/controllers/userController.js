@@ -331,33 +331,7 @@ const completeUserGuide = async (req, res) => {
   }
 };
 
-// Save Expo push token for authenticated user
-const savePushToken = async (req, res) => {
-  try {
-    const { token } = req.body;
-    console.log('[Push] savePushToken called', {
-      userId: req.user?._id?.toString?.(),
-      tokenPreview: typeof token === 'string' ? `${token.slice(0, 12)}...` : token,
-    });
-    if (!token || typeof token !== 'string') {
-      return res.status(400).json({ success: false, message: 'Valid token is required' });
-    }
-    const user = await User.findById(req.user._id);
-    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
 
-    user.expoPushToken = token;
-    await user.save();
-    console.log('[Push] expoPushToken saved', {
-      userId: user._id.toString(),
-      savedTokenPreview: `${user.expoPushToken?.slice?.(0, 12)}...`,
-    });
-
-    res.status(200).json({ success: true, message: 'Push token saved' });
-  } catch (error) {
-    console.error('Error saving push token:', error);
-    res.status(500).json({ success: false, message: 'Server error', error: error.message });
-  }
-};
 
 module.exports = {
   registerUser,
@@ -367,5 +341,4 @@ module.exports = {
   updateUser,
   deleteUser,
   completeUserGuide,
-  savePushToken,
 };
