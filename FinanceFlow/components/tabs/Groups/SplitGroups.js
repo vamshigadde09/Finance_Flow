@@ -5,7 +5,6 @@ import { Ionicons, Entypo } from '@expo/vector-icons';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
-import { io } from 'socket.io-client';
 import { useAnimatedProps, useSharedValue, withTiming, useAnimatedStyle, withSpring } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Contacts from 'expo-contacts';
@@ -398,7 +397,7 @@ const SplitGroups = () => {
     const [memberBalances, setMemberBalances] = useState({});
 
     const [settlementStatuses, setSettlementStatuses] = useState({});
-    const [socket, setSocket] = useState(null);
+    // Socket removed
     const [settlementConfirmation, setSettlementConfirmation] = useState({
         visible: false,
         member: null,
@@ -418,69 +417,7 @@ const SplitGroups = () => {
     const [selectedMember, setSelectedMember] = useState(null);
     const [contactImages, setContactImages] = useState({});
 
-    // Initialize socket connection
-    useEffect(() => {
-        const newSocket = io(API_BASE_URL);
-        setSocket(newSocket);
-
-        // Join the group room
-        if (groupData?._id) {
-            newSocket.emit('joinGroup', groupData._id);
-        }
-
-        // Listen for transaction updates
-        newSocket.on('transactionUpdate', (data) => {
-            if (data.groupId === groupData?._id) {
-                // Refresh transactions and balances
-                fetchTransactions(1);
-                fetchGroupBalances();
-                fetchSpendingSummary();
-            }
-        });
-
-        // Listen for transaction deletion
-        newSocket.on('transactionDeleted', (data) => {
-            if (data.groupId === groupData?._id) {
-                // Remove the transaction from the list
-                setTransactions(prev =>
-                    prev.filter(txn => txn._id !== data.transactionId)
-                );
-                // Refresh balances
-                fetchGroupBalances();
-                fetchSpendingSummary();
-            }
-        });
-
-        // Listen for settlement updates
-        newSocket.on('settlementUpdate', (data) => {
-            if (data.groupId === groupData?._id) {
-                // Update settlement status
-                setSettlementStatuses(prev => ({
-                    ...prev,
-                    [data.memberId]: data.status
-                }));
-                // Refresh balances
-                fetchGroupBalances();
-                fetchSpendingSummary();
-            }
-        });
-
-        // Listen for balance updates
-        newSocket.on('balanceUpdate', (data) => {
-            if (data.groupId === groupData?._id) {
-                // Refresh all balance-related data
-                fetchGroupBalances();
-                fetchSpendingSummary();
-            }
-        });
-
-        return () => {
-            if (groupData?._id) {
-                newSocket.emit('leaveGroup', groupData._id);
-            }
-            newSocket.disconnect();
-        };
-    }, [groupData?._id, currentUserId]);
+    // Socket.IO realtime updates removed. Data will refresh on user actions/API responses.
 
     const fetchSettlementStatus = useCallback(async (userId) => {
         try {
